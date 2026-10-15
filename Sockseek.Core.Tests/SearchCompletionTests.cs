@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.ExceptionServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sockseek.Core;
@@ -17,7 +16,7 @@ public class SearchCompletionTests
     [TestMethod]
     public async Task Search_CompletedSearchKeepsConcurrentResponsesWhenLibraryCleanupFails()
     {
-        var cleanupFailure = CreateSearchDisposalFailure();
+        var cleanupFailure = SearchTestFaults.CreateDisposalFailure();
         var client = new MockSoulseekClient([])
         {
             SearchHandler = async (query, callback, options, ct) =>
@@ -48,7 +47,7 @@ public class SearchCompletionTests
     public async Task Search_CancellationIsPreservedWhenLibraryCleanupFails(bool receiveResponseBeforeCancellation)
     {
         using var cancellation = new CancellationTokenSource();
-        var cleanupFailure = CreateSearchDisposalFailure();
+        var cleanupFailure = SearchTestFaults.CreateDisposalFailure();
         var responseReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new MockSoulseekClient([])
         {
@@ -83,7 +82,7 @@ public class SearchCompletionTests
     [TestMethod]
     public async Task Search_DoesNotTreatFailedSearchAsSuccessfulWhenCleanupAlsoFails()
     {
-        var cleanupFailure = CreateSearchDisposalFailure();
+        var cleanupFailure = SearchTestFaults.CreateDisposalFailure();
         var client = new MockSoulseekClient([])
         {
             SearchHandler = (query, callback, options, ct) =>
@@ -147,6 +146,56 @@ public class SearchCompletionTests
     }
 
     [TestMethod]
+    public async Task Search_BlockedResultConsumer_DoesNotBlockNetworkCompletionOrLoseQueuedResponses()
+    {
+        var consumerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseConsumer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var networkCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new MockSoulseekClient([])
+        {
+            SearchHandler = async (query, callback, options, ct) =>
+            {
+                callback(Response(0));
+                await consumerEntered.Task.WaitAsync(ct);
+                for (int i = 1; i < 8; i++)
+                    callback(Response(i));
+                SignalState(query, options, SearchStates.Completed);
+                networkCompleted.TrySetResult();
+                return new Search(query, new SearchScope(SearchScopeType.Network), 1, SearchStates.Completed, 8, 8, 0);
+            },
+        };
+        using var searcher = CreateSearcher(client);
+        var job = new SearchJob("Artist Album");
+        job.Session.RawResultAdded += (_, _) =>
+        {
+            consumerEntered.TrySetResult();
+            // A synchronous application observer, intentionally held independently of
+            // the network. The test releases it explicitly, never after a timed delay.
+            releaseConsumer.Task.GetAwaiter().GetResult();
+        };
+        int completedCount = -1;
+        job.Session.Completed += session => completedCount = session.RawSnapshot().Count;
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var search = Task.Run(() => searcher.Search(job, new SearchSettings(), new ResponseData(), watchdog.Token));
+        try
+        {
+            await networkCompleted.Task.WaitAsync(watchdog.Token);
+            Assert.IsFalse(search.IsCompleted, "Search completion must wait for accepted results to drain.");
+            Assert.IsFalse(job.IsComplete);
+        }
+        finally
+        {
+            releaseConsumer.TrySetResult();
+            await search.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        Assert.IsTrue(job.IsComplete);
+        Assert.AreEqual(8, completedCount);
+        CollectionAssert.AreEquivalent(Enumerable.Range(0, 8).Select(i => $"User{i}").ToArray(),
+            job.RawSnapshot().Select(result => result.Username).ToArray());
+    }
+
+    [TestMethod]
     public async Task Search_LargeResponseCoalescesDiscoveryWithoutLosingRawResults()
     {
         const int fileCount = 2_000;
@@ -178,23 +227,4 @@ public class SearchCompletionTests
     private static void SignalState(SearchQuery query, SearchOptions options, SearchStates state)
         => options.StateChanged?.Invoke((SearchStates.InProgress,
             new Search(query, new SearchScope(SearchScopeType.Network), 1, state, 0, 0, 0)));
-
-    // Exercise the installed dependency's actual disposal error, without racing threads
-    // or matching a localized exception message. Reflection is confined to this fixture.
-    private static SynchronizationLockException CreateSearchDisposalFailure()
-    {
-        var type = typeof(SoulseekClient).Assembly.GetType("Soulseek.SearchInternal", throwOnError: true)!;
-        var search = Activator.CreateInstance(type, SearchQuery.FromText("test"), new SearchScope(SearchScopeType.Network), 1, new SearchOptions())!;
-        var gate = (ReaderWriterLockSlim)type.GetProperty("ReaderWriterLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(search)!;
-        gate.EnterReadLock();
-        try
-        {
-            return Assert.ThrowsExactly<SynchronizationLockException>(() => ((IDisposable)search).Dispose());
-        }
-        finally
-        {
-            gate.ExitReadLock();
-            ((IDisposable)search).Dispose();
-        }
-    }
 }
