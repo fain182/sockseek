@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <!-- Redirect the lock file to the ignored 'obj' folder during manual publishes -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' Or '$(SelfContained)' == 'true' Or '$(PublishSingleFile)' == 'true' Or '$(PublishTrimmed)' == 'true'">
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' Or '$(SelfContained)' == 'true' Or '$(PublishSingleFile)' == 'true'">
     <NuGetLockFilePath>obj/packages.publish.lock.json</NuGetLockFilePath>
   </PropertyGroup>
 </Project>
