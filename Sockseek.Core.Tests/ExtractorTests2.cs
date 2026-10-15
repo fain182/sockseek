@@ -407,6 +407,27 @@ namespace Tests.ExtractorTests2
         }
 
         [TestMethod]
+        public async Task GetTracks_EmptyAlbumTrackCountCell_LeavesRowUnconstrained()
+        {
+            File.WriteAllText(_tempCsv, "artist,album,trackcount\nBand,Album1,10\nBand,Album2,\nBand,Album3,  \n");
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            config.Csv.TrackCountCol = "trackcount";
+            var extractor = new CsvExtractor(config.Csv);
+
+            var result = await extractor.GetTracks(_tempCsv, config.Extraction);
+            var albums = ((JobList)result).Jobs.Cast<AlbumJob>().ToList();
+
+            Assert.AreEqual(3, albums.Count);
+            Assert.AreEqual(10, albums[0].ExtractorFolderCond?.MinTrackCount);
+            Assert.AreEqual(10, albums[0].ExtractorFolderCond?.MaxTrackCount);
+            foreach (var album in albums.Skip(1))
+            {
+                Assert.IsNull(album.ExtractorFolderCond?.MinTrackCount);
+                Assert.IsNull(album.ExtractorFolderCond?.MaxTrackCount);
+            }
+        }
+
+        [TestMethod]
         public async Task GetTracks_ConfigDirVariable_ResolvesCsvPath()
         {
             var configDir = Path.GetDirectoryName(_tempCsv)!;
