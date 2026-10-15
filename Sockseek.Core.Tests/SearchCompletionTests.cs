@@ -43,27 +43,41 @@ public class SearchCompletionTests
     }
 
     [TestMethod]
-    public async Task Search_CancellationIsPreservedWhenLibraryCleanupFails()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Search_CancellationIsPreservedWhenLibraryCleanupFails(bool receiveResponseBeforeCancellation)
     {
         using var cancellation = new CancellationTokenSource();
         var cleanupFailure = CreateSearchDisposalFailure();
+        var responseReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new MockSoulseekClient([])
         {
-            SearchHandler = (query, callback, options, ct) =>
+            SearchHandler = async (query, callback, options, ct) =>
             {
-                callback(Response(1));
+                if (receiveResponseBeforeCancellation)
+                {
+                    callback(Response(1));
+                    await responseReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                }
                 cancellation.Cancel();
                 SignalState(query, options, SearchStates.Completed | SearchStates.Cancelled);
-                return Task.FromException<Search>(cleanupFailure);
+                ExceptionDispatchInfo.Capture(cleanupFailure).Throw();
+                return null!;
             },
         };
         using var searcher = CreateSearcher(client);
         var job = new SearchJob("Artist Album");
+        job.Session.RawResultAdded += (_, _) => responseReceived.TrySetResult();
 
-        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() =>
-            searcher.Search(job, new SearchSettings(), new ResponseData(), cancellation.Token));
+        // Cancellation while waiting for channel data may surface as the derived
+        // TaskCanceledException. Both paths must retain the caller's cancellation.
+        var error = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            searcher.Search(job, new SearchSettings(), new ResponseData(), cancellation.Token)
+                .WaitAsync(TimeSpan.FromSeconds(5)));
 
+        Assert.AreEqual(cancellation.Token, error.CancellationToken);
         Assert.IsTrue(job.IsComplete);
+        Assert.AreEqual(receiveResponseBeforeCancellation ? 1 : 0, job.ResultCount);
     }
 
     [TestMethod]

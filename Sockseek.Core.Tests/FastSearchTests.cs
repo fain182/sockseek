@@ -60,7 +60,7 @@ namespace Tests.FastSearch
                 SearchHandler = async (query, callback, options, ct) =>
                 {
                     callback(FastUser());
-                    try { await Task.Delay(Timeout.Infinite, ct); }
+                    try { await new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task.WaitAsync(ct); }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
                         searchCancelled = true;
@@ -113,7 +113,6 @@ namespace Tests.FastSearch
 
             var client = new ClientTests.MockSoulseekClient(
                 new[] { fastUserResp, goodUserResp }.ToList(),
-                searchDelayMs: 30,
                 failingUsers: new[] { "fastuser" });
 
             var (app, outputDir) = CreateApp(client,
@@ -142,7 +141,7 @@ namespace Tests.FastSearch
         [TestMethod]
         public async Task SongDownload_FastSearch_WaitsForProvisionalDownloadToComplete()
         {
-            // Simulate a scenario where the search completes instantly (searchDelayMs = 0),
+            // Simulate a scenario where the search completes immediately,
             // but the provisional download is still in progress. Without the fix, the engine
             // would see the search complete, observe that the download task wasn't finished
             // yet, assume it failed, and queue a SECOND download.
@@ -161,7 +160,7 @@ namespace Tests.FastSearch
             {
                 var runTask = app.RunAsync(CancellationToken.None);
                 await downloadGate.WaitForStartedCountAsync(1);
-                await Task.Delay(50);
+                Assert.IsFalse(runTask.IsCompleted, "The provisional download is still blocked.");
                 Assert.AreEqual(1, client.DownloadCallCount,
                     "The engine should wait for the in-progress provisional download rather than starting a fallback download.");
                 downloadGate.ReleaseAll();

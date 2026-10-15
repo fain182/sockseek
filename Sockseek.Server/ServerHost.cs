@@ -10,15 +10,18 @@ namespace Sockseek.Server;
 
 public static class ServerHost
 {
-    public static WebApplication Build(string[] args, ServerOptions? options = null, string? url = null)
+    public static WebApplication Build(string[] args, ServerOptions? options = null, string? url = null, bool logToConsole = true)
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.Logging.ClearProviders();
-        builder.Logging.AddSimpleConsole(consoleOptions =>
+        if (logToConsole)
         {
-            consoleOptions.SingleLine = false;
-            consoleOptions.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
-        });
+            builder.Logging.AddSimpleConsole(consoleOptions =>
+            {
+                consoleOptions.SingleLine = false;
+                consoleOptions.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+            });
+        }
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
         if (!string.IsNullOrWhiteSpace(url))
@@ -62,7 +65,8 @@ public static class ServerHost
         builder.Services.AddHostedService<EngineRuntimeHostedService>();
 
         var app = builder.Build();
-        CoreLoggerBridge.Configure(app.Services, (options ?? app.Services.GetRequiredService<IOptions<ServerOptions>>().Value).Engine.LogLevel);
+        if (logToConsole)
+            CoreLoggerBridge.Configure(app.Services, (options ?? app.Services.GetRequiredService<IOptions<ServerOptions>>().Value).Engine.LogLevel);
         _ = app.Services.GetRequiredService<ServerEventBroadcaster>();
         _ = app.Services.GetRequiredService<ServerActivityLogReporter>();
 

@@ -5,8 +5,6 @@ using Sockseek.Core.Services;
 using Sockseek.Core.Settings;
 using Sockseek.Server;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
 using Sockseek.Api;
 using Tests.ClientTests;
 
@@ -293,7 +291,7 @@ public class CliBackendParityTests
                     ctx.Token);
 
                 await WaitForWorkflowStateAsync(ctx.Backend, summary.WorkflowId, ServerWorkflowState.Completed);
-                await WaitForConditionAsync(
+                await WaitForConditionAsync(ctx.Backend,
                     () => messages.Contains("Auto profiles active: album-auto"),
                     $"Timed out waiting for workflow message on {ctx.Name}.");
             },
@@ -516,9 +514,8 @@ public class CliBackendParityTests
             string outputDir = CreateTempDir("Sockseek-cli-parity-remote-out-");
             seedMusic(musicRoot);
 
-            int port = GetFreeTcpPort();
-            string url = $"http://127.0.0.1:{port}";
-            var app = ServerHost.Build([], new ServerOptions
+            string url = "http://127.0.0.1:0";
+            var app = TestServerHost.Build([], new ServerOptions
             {
                 Engine = CreateEngineSettings(musicRoot),
                 DefaultDownload = CreateDownloadSettings(outputDir),
@@ -526,6 +523,7 @@ public class CliBackendParityTests
             }, url);
 
             await app.StartAsync();
+            url = app.Urls.Single();
             var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -544,11 +542,10 @@ public class CliBackendParityTests
             string musicRoot = CreateTempDir("Sockseek-cli-parity-remote-music-");
             string outputDir = CreateTempDir("Sockseek-cli-parity-remote-out-");
 
-            int port = GetFreeTcpPort();
-            string url = $"http://127.0.0.1:{port}";
+            string url = "http://127.0.0.1:0";
             var downloadSettings = CreateDownloadSettings(outputDir);
             downloadSettings.Output.NameFormat = "{filename}";
-            var app = ServerHost.Build([], new ServerOptions
+            var app = TestServerHost.Build([], new ServerOptions
             {
                 Engine = new EngineSettings { Username = "test_user", Password = "test_pass" },
                 DefaultDownload = downloadSettings,
@@ -557,6 +554,7 @@ public class CliBackendParityTests
             }, url);
 
             await app.StartAsync();
+            url = app.Urls.Single();
             var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -591,11 +589,8 @@ public class CliBackendParityTests
                         engineCompleted = true;
                     }
 
-                    var completed = await Task.WhenAny(engineTask, Task.Delay(TimeSpan.FromSeconds(5)));
-                    if (completed != engineTask)
-                        cts.Cancel();
-
-                    try { await engineTask; }
+                    cts.Cancel();
+                    try { await engineTask.WaitAsync(TimeSpan.FromSeconds(5)); }
                     catch (OperationCanceledException) { }
                 }
 
@@ -664,77 +659,46 @@ public class CliBackendParityTests
 
     private static async Task WaitForJobStateAsync(ICliBackend backend, Guid jobId, ExpectedJobStatus expectedState, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            var detail = await backend.GetJobDetailAsync(jobId, CancellationToken.None);
-            if (detail?.Summary is { } summary && ProjectState(summary) == expectedState)
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        var finalDetail = await backend.GetJobDetailAsync(jobId, CancellationToken.None);
-        Assert.Fail($"Timed out waiting for job {jobId} to reach state '{expectedState}'. Final state: {FormatState(finalDetail?.Summary)}.");
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(async () =>
+            (await backend.GetJobDetailAsync(jobId))?.Summary is { } summary && ProjectState(summary) == expectedState,
+            $"Job {jobId} did not reach '{expectedState}'.", timeoutMs);
     }
 
     private static async Task WaitForWorkflowStateAsync(ICliBackend backend, Guid workflowId, ServerWorkflowState expectedState, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            var detail = await backend.GetWorkflowAsync(workflowId, CancellationToken.None);
-            if (detail?.Summary.State == expectedState)
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        var finalDetail = await backend.GetWorkflowAsync(workflowId, CancellationToken.None);
-        string jobs = finalDetail == null
-            ? "<missing>"
-            : string.Join(", ", finalDetail.Jobs.Select(job => $"[{job.DisplayId}] {job.Kind}:{ProjectState(job)} parent={job.ParentJobId?.ToString() ?? "-"} result={job.ResultJobId?.ToString() ?? "-"}"));
-        Assert.Fail($"Timed out waiting for workflow {workflowId} to reach state '{expectedState}'. Jobs: {jobs}");
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(async () =>
+            (await backend.GetWorkflowAsync(workflowId))?.Summary.State == expectedState,
+            $"Workflow {workflowId} did not reach '{expectedState}'.", timeoutMs);
     }
 
     private static async Task<JobSummaryDto> WaitForWorkflowJobAsync(
-        ICliBackend backend,
-        Guid workflowId,
-        Func<JobSummaryDto, bool> predicate,
-        int timeoutMs = 5000)
+        ICliBackend backend, Guid workflowId, Func<JobSummaryDto, bool> predicate, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        JobSummaryDto? match = null;
+        await signal.WaitUntilAsync(async () =>
         {
-            var jobs = await backend.GetJobsAsync(new JobQuery(null, null, null, workflowId, IncludeAll: true), CancellationToken.None);
-            var match = jobs.FirstOrDefault(predicate);
-            if (match != null)
-                return match;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        var finalJobs = await backend.GetJobsAsync(new JobQuery(null, null, null, workflowId, IncludeAll: true), CancellationToken.None);
-        Assert.Fail($"Timed out waiting for matching workflow job. Jobs: {string.Join(", ", finalJobs.Select(job => $"[{job.DisplayId}] {job.Kind}:{ProjectState(job)}"))}");
-        throw new InvalidOperationException("Unreachable after Assert.Fail.");
+            var jobs = await backend.GetJobsAsync(new JobQuery(null, null, null, workflowId, IncludeAll: true));
+            match = jobs.FirstOrDefault(predicate);
+            return match != null;
+        }, "No matching workflow job was registered.", timeoutMs);
+        return match!;
     }
 
-    private static async Task WaitForConditionAsync(Func<bool> condition, string failureMessage, int timeoutMs = 5000)
+    private static async Task WaitForConditionAsync(ICliBackend backend, Func<bool> condition, string failureMessage, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            if (condition())
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        Assert.Fail(failureMessage);
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(condition, failureMessage, timeoutMs);
     }
 
     private static ExpectedJobStatus ProjectState(JobSummaryDto summary)
@@ -783,12 +747,5 @@ public class CliBackendParityTests
             Directory.Delete(path, recursive: true);
     }
 
-    private static int GetFreeTcpPort()
-    {
-        TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
+
 }

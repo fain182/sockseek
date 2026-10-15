@@ -103,7 +103,8 @@ public class SoulseekClientManager : IDisposable
         if (HasFatalError) return;
         if (_monitorTask != null) return;
         _monitorCts = new CancellationTokenSource();
-        _monitorTask = Task.Run(() => MonitorConnectionLoopAsync(_monitorCts.Token));
+        var token = _monitorCts.Token;
+        _monitorTask = Task.Run(() => MonitorConnectionLoopAsync(token));
     }
 
     private void MarkFatal(Exception exception)
@@ -111,7 +112,12 @@ public class SoulseekClientManager : IDisposable
         lock (stateLock)
         {
             _fatalException ??= exception;
-            _readyTcs.TrySetException(_fatalException);
+            if (_readyTcs.TrySetException(_fatalException))
+            {
+                // This broadcast may have no waiters when initialization itself fails.
+                // Observe its fault here; existing waiters still receive the same exception.
+                _ = _readyTcs.Task.Exception;
+            }
         }
 
         _monitorCts?.Cancel();

@@ -41,7 +41,7 @@ public class LocalCliBackendTests
             };
             downloadSettings.Extraction.Input = "test";
             var clientManager = new SoulseekClientManager(engineSettings);
-            var engine = new DownloadEngine(engineSettings, clientManager);
+            await using var engine = new DownloadEngine(engineSettings, clientManager);
             var backend = new LocalCliBackend(engine, downloadSettings);
             var seenEvents = new ConcurrentBag<ServerEventEnvelopeDto>();
             var seenWorkflowUpdates = new ConcurrentBag<WorkflowClientUpdate>();
@@ -124,7 +124,7 @@ public class LocalCliBackendTests
             var resolver = new SubmissionOptionsJobSettingsResolver(
                 ConfigManager.CreateJobSettingsResolver(new ConfigFile("none", []), args, new CliSettings { InteractiveMode = true, NoProgress = true }),
                 normalize: settings => SettingsNormalizer.NormalizeDownloadPaths(settings, settings.RuntimePathContext));
-            var engine = new DownloadEngine(engineSettings, clientManager, resolver);
+            await using var engine = new DownloadEngine(engineSettings, clientManager, resolver);
             var backend = new LocalCliBackend(engine, downloadSettings, resolver);
             var engineTask = engine.RunAsync(cts.Token);
 
@@ -205,7 +205,7 @@ public class LocalCliBackendTests
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
 
             var clientManager = new SoulseekClientManager(engineSettings);
-            var engine = new DownloadEngine(engineSettings, clientManager);
+            await using var engine = new DownloadEngine(engineSettings, clientManager);
             var backend = new LocalCliBackend(engine);
 
             var searchJob = new SearchJob(new AlbumQuery
@@ -218,7 +218,7 @@ public class LocalCliBackendTests
             engine.Enqueue(searchJob, downloadSettings);
             var runTask = engine.RunAsync(cts.Token);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => searchJob.TerminalOutcome == JobTerminalOutcome.Succeeded,
                 "Timed out waiting for the album search to complete.");
 
@@ -281,7 +281,7 @@ public class LocalCliBackendTests
             };
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
 
-            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            await using var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
             var backend = new LocalCliBackend(engine);
 
             var albumJob = new AlbumJob(new AlbumQuery
@@ -297,7 +297,7 @@ public class LocalCliBackendTests
             engine.Enqueue(albumJob, downloadSettings);
             var runTask = engine.RunAsync(cts.Token);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => albumJob.IsAwaitingSelection,
                 "Timed out waiting for the manual album job to reach the picker.");
 
@@ -365,7 +365,7 @@ public class LocalCliBackendTests
             };
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
 
-            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            await using var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
             var backend = new LocalCliBackend(engine);
 
             var searchJob = new SearchJob(new AlbumQuery
@@ -378,7 +378,7 @@ public class LocalCliBackendTests
             engine.Enqueue(searchJob, downloadSettings);
             var runTask = engine.RunAsync(cts.Token);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => searchJob.TerminalOutcome == JobTerminalOutcome.Succeeded,
                 "Timed out waiting for the album search to complete.");
 
@@ -401,7 +401,7 @@ public class LocalCliBackendTests
 
             Assert.IsNotNull(downloadSummary);
             AlbumJob? albumJob = null;
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () =>
                 {
                     albumJob = (AlbumJob?)engine.GetJob(downloadSummary.JobId);
@@ -414,7 +414,7 @@ public class LocalCliBackendTests
             Assert.IsTrue(albumJob.ResolvedTarget.IsFullyRetrieved, "The selected retrieved folder must remain fully retrieved after handoff to album download.");
             Assert.AreEqual(2, albumJob.ResolvedTarget.Files.Count, "The download should use the retrieved folder snapshot, not reconstruct a partial folder from old search results.");
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => albumJob.IsTerminal,
                 "Timed out waiting for selected album download to complete.");
 
@@ -429,8 +429,8 @@ public class LocalCliBackendTests
         finally
         {
             cts.Cancel();
-            await DeleteDirectoryIfExistsWithRetryAsync(musicRoot);
-            await DeleteDirectoryIfExistsWithRetryAsync(outputDir);
+            if (Directory.Exists(musicRoot)) Directory.Delete(musicRoot, true);
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         }
     }
 
@@ -464,7 +464,7 @@ public class LocalCliBackendTests
             };
 
             var clientManager = new SoulseekClientManager(engineSettings);
-            var engine = new DownloadEngine(engineSettings, clientManager);
+            await using var engine = new DownloadEngine(engineSettings, clientManager);
             var backend = new LocalCliBackend(engine, downloadSettings);
             var seenTypes = new ConcurrentBag<string>();
             var deliveryOrder = new List<string>();
@@ -536,14 +536,14 @@ public class LocalCliBackendTests
                 Search = { MinSharesAggregate = 1 },
             };
 
-            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            await using var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
             var backend = new LocalCliBackend(engine);
 
             var searchJob = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track One" });
             engine.Enqueue(searchJob, downloadSettings);
             var runTask = engine.RunAsync(cts.Token);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => searchJob.TerminalOutcome == JobTerminalOutcome.Succeeded,
                 "Timed out waiting for aggregate track search to complete.");
 
@@ -592,14 +592,14 @@ public class LocalCliBackendTests
                 Search = { MinSharesAggregate = 1 },
             };
 
-            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            await using var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
             var backend = new LocalCliBackend(engine);
 
             var searchJob = new SearchJob(new AlbumQuery { Artist = "Artist" });
             engine.Enqueue(searchJob, downloadSettings);
             var runTask = engine.RunAsync(cts.Token);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => searchJob.TerminalOutcome == JobTerminalOutcome.Succeeded,
                 "Timed out waiting for aggregate album search to complete.");
 
@@ -625,40 +625,13 @@ public class LocalCliBackendTests
         }
     }
 
-    private static async Task WaitForConditionAsync(Func<bool> condition, string failureMessage)
+    private static async Task WaitForConditionAsync(ICliBackend backend, Func<bool> condition, string failureMessage, int timeoutMs = 5000)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-                return;
-
-            await Task.Delay(25);
-        }
-
-        Assert.Fail(failureMessage);
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(condition, failureMessage, timeoutMs);
     }
 
-    private static async Task DeleteDirectoryIfExistsWithRetryAsync(string path)
-    {
-        for (int attempt = 0; attempt < 10; attempt++)
-        {
-            if (!Directory.Exists(path))
-                return;
 
-            try
-            {
-                Directory.Delete(path, true);
-                return;
-            }
-            catch (IOException) when (attempt < 9)
-            {
-                await Task.Delay(50);
-            }
-            catch (UnauthorizedAccessException) when (attempt < 9)
-            {
-                await Task.Delay(50);
-            }
-        }
-    }
 }

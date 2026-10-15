@@ -6,6 +6,14 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
+    <Compile Include="$(MSBuildThisFileDirectory)tests/TestSignal.cs" Link="TestSupport/TestSignal.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Sockseek.Cli.Tests' Or '$(MSBuildProjectName)' == 'Sockseek.Server.Tests'">
+    <Compile Include="$(MSBuildThisFileDirectory)tests/TestServerHost.cs" Link="TestSupport/TestServerHost.cs" />
+  </ItemGroup>
+
   <!-- Redirect the lock file to the ignored 'obj' folder during manual publishes -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' Or '$(SelfContained)' == 'true' Or '$(PublishSingleFile)' == 'true' Or '$(PublishTrimmed)' == 'true'">
     <NuGetLockFilePath>obj/packages.publish.lock.json</NuGetLockFilePath>

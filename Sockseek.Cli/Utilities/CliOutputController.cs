@@ -13,7 +13,8 @@ internal sealed class CliOutputController : IDisposable
     private bool _canUseLiveRendering;
     private LogLevel _liveLogMinimumLevel = LogLevel.Information;
     private bool _liveLogSinkAttached;
-    private bool _disposed;
+    private IDisposable? _consoleSink;
+    private volatile bool _disposed;
 
     private CliOutputController(bool installedConsoleSink, bool forceHumanLogsToError)
     {
@@ -98,9 +99,6 @@ internal sealed class CliOutputController : IDisposable
             if (_live != null || !_canUseLiveRendering || _disposed)
                 return;
 
-            if (_installedConsoleSink)
-                SockseekLog.RemoveConsoleOutputs();
-
             _live = new TerminalLiveRenderer();
             Printing.LiveWriteLine = (line, _) => Publish(new CliOutputEvent.RawLine(line));
             AttachLiveLogSinkIfReady();
@@ -149,23 +147,28 @@ internal sealed class CliOutputController : IDisposable
             return;
 
         _disposed = true;
+        _consoleSink?.Dispose();
         StopLiveRendering();
     }
 
     private void AttachConsoleSink()
-        => SockseekLog.AddStructuredConsoleSink(WriteLog);
+        => _consoleSink = SockseekLog.AddStructuredConsoleSink(WriteLog);
 
     private void AttachLiveLogSinkIfReady()
     {
         if (!_installedConsoleSink || _live == null || _liveLogSinkAttached)
             return;
 
-        SockseekLog.AddStructuredConsoleSink(WriteLog, _liveLogMinimumLevel);
+        _consoleSink?.Dispose();
+        _consoleSink = SockseekLog.AddStructuredConsoleSink(WriteLog, _liveLogMinimumLevel);
         _liveLogSinkAttached = true;
     }
 
     private void WriteLog(SockseekLog.StructuredLogEntry entry, string _)
     {
+        if (_disposed)
+            return;
+
         var outputEvent = CliOutputEvent.FromLogEntry(entry);
 
         if (_live != null)

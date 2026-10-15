@@ -269,7 +269,61 @@ public class SockseekLogTests
         Assert.AreEqual(1, entries.Count);
         Assert.AreEqual(LogLevel.Trace, entries[0].Level);
         Assert.AreEqual(SockseekLog.Categories.Core, entries[0].CategoryName);
-        StringAssert.Contains(entries[0].Message, "Ignored unobserved Soulseek peer-network task exception");
+        StringAssert.Contains(entries[0].Message, "Ignored unobserved Soulseek task exception");
+    }
+
+    [TestMethod]
+    public void StructuredConsoleSink_DisposeRemovesOnlyItsRegistration()
+    {
+        var firstMessages = new List<string>();
+        var secondMessages = new List<string>();
+        using var first = SockseekLog.AddStructuredConsoleSink((entry, _) => firstMessages.Add(entry.Message));
+        using var second = SockseekLog.AddStructuredConsoleSink((entry, _) => secondMessages.Add(entry.Message));
+
+        SockseekLog.Info("before disposal");
+        first.Dispose();
+        first.Dispose();
+        SockseekLog.Info("after disposal");
+
+        CollectionAssert.AreEqual(new[] { "before disposal" }, firstMessages);
+        CollectionAssert.AreEqual(new[] { "before disposal", "after disposal" }, secondMessages);
+    }
+
+    [TestMethod]
+    public void UnobservedTaskExceptionHandler_ConnectionUnavailable_LogsTrace()
+    {
+        var entries = new List<SockseekLog.StructuredLogEntry>();
+        SockseekLog.AddStructuredSink((entry, _) => entries.Add(entry), LogLevel.Trace);
+        var args = new UnobservedTaskExceptionEventArgs(new AggregateException(
+            new Sockseek.Core.Services.SoulseekConnectionUnavailableException(
+                "Soulseek login failed: Missing Soulseek username and password.",
+                new InvalidOperationException("Missing Soulseek username and password.")),
+            new SocketException((int)SocketError.ConnectionRefused)));
+
+        HandleUnobservedTaskException(args);
+
+        Assert.IsTrue(args.Observed);
+        Assert.AreEqual(1, entries.Count);
+        Assert.AreEqual(LogLevel.Trace, entries[0].Level);
+        StringAssert.Contains(entries[0].Message, "Missing Soulseek username and password.");
+    }
+
+    [TestMethod]
+    public void UnobservedTaskExceptionHandler_ConnectionUnavailableAndUnknownFailure_LogsError()
+    {
+        var entries = new List<SockseekLog.StructuredLogEntry>();
+        SockseekLog.AddStructuredSink((entry, _) => entries.Add(entry), LogLevel.Trace);
+        var args = new UnobservedTaskExceptionEventArgs(new AggregateException(
+            new Sockseek.Core.Services.SoulseekConnectionUnavailableException(
+                "Soulseek login failed", new InvalidOperationException("Missing credentials")),
+            new InvalidOperationException("engine invariant broke")));
+
+        HandleUnobservedTaskException(args);
+
+        Assert.IsTrue(args.Observed);
+        Assert.AreEqual(1, entries.Count);
+        Assert.AreEqual(LogLevel.Error, entries[0].Level);
+        StringAssert.Contains(entries[0].Message, "engine invariant broke");
     }
 
     [TestMethod]
@@ -339,7 +393,7 @@ public class SockseekLogTests
 
     private static bool IsExpectedSoulseekPeerNetworkNoise(Exception exception)
         => (bool)typeof(SockseekLog)
-            .GetMethod("IsExpectedSoulseekPeerNetworkNoise", BindingFlags.Static | BindingFlags.NonPublic)!
+            .GetMethod("IsExpectedSoulseekTaskNoise", BindingFlags.Static | BindingFlags.NonPublic)!
             .Invoke(null, [exception])!;
 
     private static void HandleUnobservedTaskException(UnobservedTaskExceptionEventArgs args)

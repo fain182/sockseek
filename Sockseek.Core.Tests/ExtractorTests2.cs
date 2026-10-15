@@ -269,10 +269,7 @@ namespace Tests.ExtractorTests2
             var extractor = new CsvExtractor(config.Csv);
 
             var extractTask = Task.Run(() => extractor.GetTracks(_tempCsv, config.Extraction));
-            var completedTask = await Task.WhenAny(extractTask, Task.Delay(TimeSpan.FromSeconds(1)));
-
-            Assert.AreSame(extractTask, completedTask, "Empty CSV extraction should complete instead of waiting forever.");
-            var list = (JobList)await extractTask;
+            var list = (JobList)await extractTask.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.AreEqual(0, list.Jobs.Count);
         }

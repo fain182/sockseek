@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Sockseek.Core.Jobs;
+using Sockseek.Core.Services;
 
 namespace Sockseek.Core;
 
@@ -152,19 +153,22 @@ public static class SockseekLog
             output));
     }
 
-    public static void AddStructuredConsoleSink(
+    /// <returns>A registration that removes only this sink when disposed.</returns>
+    public static IDisposable AddStructuredConsoleSink(
         Action<StructuredLogEntry, string> output,
         LogLevel minimumLevel = LogLevel.Information,
         bool prependDate = false,
         bool prependLogLevel = false)
     {
-        AddProvider(new RoutingLoggerProvider(
+        var provider = new RoutingLoggerProvider(
             minimumLevel,
             includeConsole: true,
             includeFile: false,
             prependDate,
             prependLogLevel,
-            output));
+            output);
+        AddProvider(provider);
+        return new ProviderRegistration(provider);
     }
 
     public static void AddOrReplaceFile(
@@ -281,10 +285,10 @@ public static class SockseekLog
     {
         args.SetObserved();
 
-        if (IsExpectedSoulseekPeerNetworkNoise(args.Exception))
+        if (IsExpectedSoulseekTaskNoise(args.Exception))
         {
             Trace(
-                $"Ignored unobserved Soulseek peer-network task exception: {ExceptionSummary(args.Exception)}",
+                $"Ignored unobserved Soulseek task exception: {ExceptionSummary(args.Exception)}",
                 categoryName: Categories.Core);
             return;
         }
@@ -292,13 +296,14 @@ public static class SockseekLog
         Error(args.Exception, "Unobserved task exception", categoryName: Categories.Core);
     }
 
-    internal static bool IsExpectedSoulseekPeerNetworkNoise(Exception exception)
+    internal static bool IsExpectedSoulseekTaskNoise(Exception exception)
     {
         var flattened = exception is AggregateException aggregate
             ? aggregate.Flatten().InnerExceptions
             : [exception];
 
-        return flattened.Count > 0 && flattened.All(IsExpectedSoulseekPeerNetworkException);
+        return flattened.Count > 0 && flattened.All(exception =>
+            exception is SoulseekConnectionUnavailableException || IsExpectedSoulseekPeerNetworkException(exception));
     }
 
     private static bool IsExpectedSoulseekPeerNetworkException(Exception exception)
@@ -470,6 +475,18 @@ public static class SockseekLog
         LogLevel.Warning => ConsoleColor.DarkYellow,
         _ => ConsoleColor.Gray,
     };
+
+    private sealed class ProviderRegistration(RoutingLoggerProvider provider) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (Sync)
+            {
+                if (Providers.Remove(provider))
+                    RebuildFactory();
+            }
+        }
+    }
 
     private sealed class RoutingLoggerProvider : ILoggerProvider
     {

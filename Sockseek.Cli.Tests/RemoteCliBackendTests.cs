@@ -4,9 +4,9 @@ using Sockseek.Cli;
 using Sockseek.Core;
 using Sockseek.Core.Settings;
 using Sockseek.Server;
+using Tests.ClientTests;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Sockets;
 
 namespace Tests.Cli;
 
@@ -69,9 +69,8 @@ public class RemoteCliBackendTests
         Directory.CreateDirectory(outputDir);
         File.WriteAllText(Path.Combine(trackDir, "01. Artist - Track One.mp3"), "a");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -92,6 +91,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             var seenTypes = new ConcurrentBag<string>();
             var seenWorkflowUpdates = new ConcurrentBag<WorkflowClientUpdate>();
@@ -129,9 +129,9 @@ public class RemoteCliBackendTests
                 .ToArray();
             CollectionAssert.Contains(downloaded, "01. Artist - Track One.mp3");
 
-            await WaitForEventTypeAsync(seenTypes, "job.upserted");
-            await WaitForEventTypeAsync(seenTypes, "search.updated");
-            await WaitForEventTypeAsync(seenTypes, "download.started");
+            await WaitForEventTypeAsync(backend, seenTypes, "job.upserted");
+            await WaitForEventTypeAsync(backend, seenTypes, "search.updated");
+            await WaitForEventTypeAsync(backend, seenTypes, "download.started");
             Assert.IsTrue(seenTypes.Contains("job.upserted"));
             Assert.IsTrue(seenTypes.Contains("search.updated"));
             Assert.IsTrue(seenTypes.Contains("download.started"));
@@ -142,8 +142,9 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
-            await DeleteDirectoryIfExistsWithRetryAsync(musicRoot);
-            await DeleteDirectoryIfExistsWithRetryAsync(outputDir);
+            await app.DisposeAsync();
+            if (Directory.Exists(musicRoot)) Directory.Delete(musicRoot, true);
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
         }
     }
 
@@ -158,9 +159,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(albumDir, "01. Artist - Track One.mp3"), "a");
         File.WriteAllText(Path.Combine(albumDir, "02. Artist - Track Two.mp3"), "b");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -185,6 +185,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -223,6 +224,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -241,9 +243,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(albumDir, "01. Track One.mp3"), "a");
         File.WriteAllText(Path.Combine(albumDir, "02. Track Two.mp3"), "b");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -265,6 +266,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -294,7 +296,7 @@ public class RemoteCliBackendTests
                 terminalAlbumActivitySeen.Task,
                 "Timed out waiting for the remote terminal album activity event.");
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 () => Task.FromResult(Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length >= 2),
                 "Timed out waiting for extracted album downloads to appear on disk.");
 
@@ -320,6 +322,7 @@ public class RemoteCliBackendTests
             SockseekLog.RemoveNonFileOutputs();
             Console.SetOut(originalOut);
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -343,9 +346,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(albumTwoDir, "01. Artist Two - Track Two.mp3"), "b");
         File.WriteAllLines(inputPath, ["a:\"Artist One - Album One\"", "a:\"Artist Two - Album Two\""]);
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -380,6 +382,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -403,7 +406,8 @@ public class RemoteCliBackendTests
 
                     try
                     {
-                        await Task.Delay(25);
+                        if (Volatile.Read(ref pickerCalls) == 0)
+                            await BackendTestWait.AlbumChoicesReadyAsync(backend, 2);
                         Interlocked.Increment(ref pickerCalls);
                         var folder = request.Folders.First();
                         return new InteractiveModeManager.RunResult(
@@ -446,6 +450,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (File.Exists(inputPath))
                 File.Delete(inputPath);
             if (Directory.Exists(musicRoot))
@@ -468,9 +473,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(albumDir, "01. file1.mp3"), "a");
         File.WriteAllLines(inputPath, ["a:\"Album Name\"                 strict-album=true;format=flac"]);
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -495,6 +499,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -537,6 +542,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (File.Exists(inputPath))
                 File.Delete(inputPath);
             if (Directory.Exists(musicRoot))
@@ -563,9 +569,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(discoveryDir, "02. ELO - Confusion.mp3"), "d");
         File.WriteAllText(Path.Combine(discoveryDir, "03. ELO - Last Train to London.mp3"), "e");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -591,6 +596,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -646,6 +652,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -665,15 +672,17 @@ public class RemoteCliBackendTests
         for (int i = 1; i <= 12; i++)
             File.WriteAllBytes(Path.Combine(albumDir, $"{i:00}. Artist - Track {i:00}.mp3"), new byte[1024]);
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockedClient = MockSoulseekClient.FromLocalPaths(false, musicRoot);
+        blockedClient.BeforeDownloadCompletesAsync = (_, _, ct) => release.Task.WaitAsync(ct);
+        var app = TestServerHost.Build([], new ServerOptions
         {
+            ClientFactory = _ => blockedClient,
             Engine = new EngineSettings
             {
                 MockFilesDir = musicRoot,
                 MockFilesReadTags = false,
-                MockFilesSlow = true,
             },
             DefaultDownload = new DownloadSettings
             {
@@ -694,6 +703,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -712,7 +722,7 @@ public class RemoteCliBackendTests
 
             Assert.IsNotNull(downloadSummary);
 
-            await WaitForConditionAsync(
+            await WaitForConditionAsync(backend,
                 async () =>
                 {
                     return (await GetChildSongPayloadsAsync(backend, downloadSummary.JobId))
@@ -740,6 +750,7 @@ public class RemoteCliBackendTests
             SockseekLog.RemoveNonFileOutputs();
             Console.SetOut(originalOut);
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -764,15 +775,17 @@ public class RemoteCliBackendTests
             File.WriteAllBytes(Path.Combine(albumTwoDir, $"{i:00}. Artist Two - Track {i:00}.mp3"), new byte[1024]);
         }
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockedClient = MockSoulseekClient.FromLocalPaths(false, musicRoot);
+        blockedClient.BeforeDownloadCompletesAsync = (_, _, ct) => release.Task.WaitAsync(ct);
+        var app = TestServerHost.Build([], new ServerOptions
         {
+            ClientFactory = _ => blockedClient,
             Engine = new EngineSettings
             {
                 MockFilesDir = musicRoot,
                 MockFilesReadTags = false,
-                MockFilesSlow = true,
             },
             DefaultDownload = new DownloadSettings
             {
@@ -792,6 +805,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -827,6 +841,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -844,9 +859,8 @@ public class RemoteCliBackendTests
         Directory.CreateDirectory(outputDir);
         File.WriteAllText(Path.Combine(trackDir, "01. Artist - Track One.mp3"), "a");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -868,6 +882,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -905,6 +920,7 @@ public class RemoteCliBackendTests
         {
             Console.SetOut(originalOut);
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -924,9 +940,8 @@ public class RemoteCliBackendTests
         File.WriteAllText(Path.Combine(existingAlbumDir, "01. Artist Two - Album Track.mp3"), "already here");
         File.WriteAllLines(inputPath, ["s:\"Artist One - Track One\"", "a:\"Artist Two - Album Two\""]);
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings(),
             DefaultDownload = new DownloadSettings
@@ -948,6 +963,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -987,6 +1003,7 @@ public class RemoteCliBackendTests
         {
             Console.SetOut(originalOut);
             await app.StopAsync();
+            await app.DisposeAsync();
             if (File.Exists(inputPath))
                 File.Delete(inputPath);
             if (Directory.Exists(outputDir))
@@ -995,19 +1012,7 @@ public class RemoteCliBackendTests
     }
 
 
-    private static int GetFreeTcpPort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
+
 
     [TestMethod]
     public async Task RemoteCliBackend_SubmitJobList_SerializesTypedChildItems()
@@ -1019,9 +1024,8 @@ public class RemoteCliBackendTests
         Directory.CreateDirectory(outputDir);
         File.WriteAllText(Path.Combine(trackDir, "01. Artist - Track One.mp3"), "a");
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -1042,6 +1046,7 @@ public class RemoteCliBackendTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
@@ -1063,6 +1068,7 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
+            await app.DisposeAsync();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
             if (Directory.Exists(outputDir))
@@ -1072,33 +1078,20 @@ public class RemoteCliBackendTests
 
     private static async Task WaitForJobStateAsync(ICliBackend backend, Guid jobId, ExpectedJobStatus expectedState, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            var detail = await backend.GetJobDetailAsync(jobId, CancellationToken.None);
-            if (detail?.Summary is { } summary && ProjectState(summary) == expectedState)
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        Assert.Fail($"Timed out waiting for job {jobId} to reach state '{expectedState}'.");
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(async () =>
+            (await backend.GetJobDetailAsync(jobId))?.Summary is { } summary && ProjectState(summary) == expectedState,
+            $"Job {jobId} did not reach '{expectedState}'.", timeoutMs);
     }
 
-    private static async Task WaitForEventTypeAsync(ConcurrentBag<string> seenTypes, string eventType, int timeoutMs = 5000)
+    private static async Task WaitForEventTypeAsync(ICliBackend backend, ConcurrentBag<string> seenTypes, string eventType, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            if (seenTypes.Contains(eventType))
-                return;
-
-            await Task.Delay(25, CancellationToken.None);
-        }
-
-        Assert.Fail($"Timed out waiting for event '{eventType}'. Seen: {string.Join(", ", seenTypes.Distinct().OrderBy(x => x))}");
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(() => seenTypes.Contains(eventType), $"Event '{eventType}' was not received.", timeoutMs);
     }
 
     private static async Task AwaitOrFailAsync(Task task, string failureMessage, int timeoutMs = 5000)
@@ -1115,27 +1108,17 @@ public class RemoteCliBackendTests
 
     private static async Task WaitForWorkflowStateAsync(ICliBackend backend, Guid workflowId, ServerWorkflowState expectedState, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            var detail = await backend.GetWorkflowAsync(workflowId, CancellationToken.None);
-            if (detail?.Summary.State == expectedState)
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        var finalDetail = await backend.GetWorkflowAsync(workflowId, CancellationToken.None);
-        string jobs = finalDetail == null
-            ? "<missing>"
-            : string.Join(", ", finalDetail.Jobs.Select(job => $"[{job.DisplayId}] {job.Kind}:{ProjectState(job)} parent={job.ParentJobId?.ToString() ?? "-"} result={job.ResultJobId?.ToString() ?? "-"}"));
-        Assert.Fail($"Timed out waiting for workflow {workflowId} to reach state '{expectedState}'. Jobs: {jobs}");
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(async () =>
+            (await backend.GetWorkflowAsync(workflowId))?.Summary.State == expectedState,
+            $"Workflow {workflowId} did not reach '{expectedState}'.", timeoutMs);
     }
 
     private static async Task WaitForAlbumFileDownloadToStartAsync(ICliBackend backend, Guid albumJobId)
     {
-        await WaitForConditionAsync(
+        await WaitForConditionAsync(backend,
                 async () =>
                 {
                     return (await GetChildSongPayloadsAsync(backend, albumJobId))
@@ -1213,45 +1196,15 @@ public class RemoteCliBackendTests
         return summary;
     }
 
-    private static async Task WaitForConditionAsync(Func<Task<bool>> condition, string failureMessage, int timeoutMs = 5000)
+    private static async Task WaitForConditionAsync(ICliBackend backend, Func<Task<bool>> condition, string failureMessage, int timeoutMs = 5000)
     {
-        using var timeout = new CancellationTokenSource(timeoutMs);
-
-        while (!timeout.IsCancellationRequested)
-        {
-            if (await condition())
-                return;
-
-            await Task.Delay(50, CancellationToken.None);
-        }
-
-        Assert.Fail(failureMessage);
+        using var signal = new TestSignal().Subscribe<ServerEventEnvelopeDto>(
+            handler => backend.EventReceived += handler,
+            handler => backend.EventReceived -= handler);
+        await signal.WaitUntilAsync(condition, failureMessage, timeoutMs);
     }
 
-    private static async Task DeleteDirectoryIfExistsWithRetryAsync(string path)
-    {
-        for (int attempt = 0; attempt < 5; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(path))
-                    Directory.Delete(path, recursive: true);
-                return;
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return;
-            }
-            catch (IOException) when (attempt < 4)
-            {
-                await Task.Delay(100);
-            }
-            catch (UnauthorizedAccessException) when (attempt < 4)
-            {
-                await Task.Delay(100);
-            }
-        }
-    }
+
 
     private sealed class StaticResponseHandler(HttpResponseMessage response) : HttpMessageHandler
     {

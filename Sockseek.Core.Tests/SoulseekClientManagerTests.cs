@@ -74,14 +74,17 @@ public class SoulseekClientManagerTests
 
         try
         {
-            await Assert.ThrowsExceptionAsync<SoulseekConnectionUnavailableException>(
+            var pendingWait = manager.WaitUntilReadyAsync();
+            var failure = await Assert.ThrowsExactlyAsync<SoulseekConnectionUnavailableException>(
                 () => manager.EnsureConnectedAndLoggedInAsync(settings));
 
-            var waitTask = manager.WaitUntilReadyAsync();
-            var completed = await Task.WhenAny(waitTask, Task.Delay(TimeSpan.FromMilliseconds(500)));
+            var pendingFailure = await Assert.ThrowsExactlyAsync<SoulseekConnectionUnavailableException>(() =>
+                pendingWait.WaitAsync(TimeSpan.FromSeconds(5)));
+            var subsequentFailure = await Assert.ThrowsExactlyAsync<SoulseekConnectionUnavailableException>(
+                () => manager.WaitUntilReadyAsync());
 
-            Assert.AreSame(waitTask, completed, "Permanent login failures must wake readiness waiters instead of leaving the engine stuck forever.");
-            await Assert.ThrowsExceptionAsync<SoulseekConnectionUnavailableException>(() => waitTask);
+            Assert.AreSame(failure, pendingFailure);
+            Assert.AreSame(failure, subsequentFailure);
         }
         finally
         {

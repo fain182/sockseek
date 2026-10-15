@@ -1,5 +1,3 @@
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -21,9 +19,8 @@ public class OpenApiContractTests
         Directory.CreateDirectory(musicRoot);
         Directory.CreateDirectory(outputDir);
 
-        int port = GetFreeTcpPort();
-        string url = $"http://127.0.0.1:{port}";
-        await using var app = ServerHost.Build([], new ServerOptions
+        string url = "http://127.0.0.1:0";
+        await using var app = TestServerHost.Build([], new ServerOptions
         {
             Engine = new EngineSettings
             {
@@ -43,6 +40,7 @@ public class OpenApiContractTests
         try
         {
             await app.StartAsync();
+            url = app.Urls.Single();
             using var http = new HttpClient { BaseAddress = new Uri(url) };
             using var response = await http.GetAsync("/api/openapi.json");
 
@@ -150,17 +148,5 @@ public class OpenApiContractTests
         }
     }
 
-    private static int GetFreeTcpPort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
+
 }
