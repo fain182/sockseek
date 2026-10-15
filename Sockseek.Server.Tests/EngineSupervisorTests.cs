@@ -23,7 +23,7 @@ public class EngineSupervisorTests
             var supervisor = CreateSupervisor(musicRoot, outputDir);
             var oversized = new string('x', JobRequestMapper.MaxSearchTextLength + 1);
 
-            await Assert.ThrowsExceptionAsync<ArgumentException>(() =>
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
                 supervisor.SubmitSearchJobAsync(new SubmitSearchJobRequestDto(oversized), CancellationToken.None));
 
             Assert.AreEqual(0, supervisor.StateStore.GetWorkflows().Count);

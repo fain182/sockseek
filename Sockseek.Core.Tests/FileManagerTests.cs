@@ -511,7 +511,7 @@ namespace Tests.FileManagerTests
             Assert.IsFalse(File.Exists(Path.Combine(testRoot, "MyPlaylist", "Album1", "Custom", "01. Track1.mp3")));
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("pdf")]
         [DataRow("aiff")]
         [DataRow("xyz")]

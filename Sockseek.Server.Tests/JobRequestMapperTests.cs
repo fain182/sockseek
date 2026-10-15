@@ -18,7 +18,7 @@ public class JobRequestMapperTests
                 @"Artist\Album",
                 [FileDto(@"Artist\Other\01. Artist - Track.mp3")]));
 
-        Assert.ThrowsException<ArgumentException>(() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
             JobRequestMapper.ApplySelectedFolderSnapshot(ResolvedFolder(), request));
     }
 
@@ -31,7 +31,7 @@ public class JobRequestMapperTests
                 @"Artist\Album",
                 [FileDto(@"Artist\Album\01. Artist - Track.mp3", username: "other")]));
 
-        Assert.ThrowsException<ArgumentException>(() =>
+        Assert.ThrowsExactly<ArgumentException>(() =>
             JobRequestMapper.ApplySelectedFolderSnapshot(ResolvedFolder(), request));
     }
 

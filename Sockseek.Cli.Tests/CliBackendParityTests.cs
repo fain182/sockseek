@@ -247,7 +247,7 @@ public class CliBackendParityTests
                 await WaitForWorkflowStateAsync(ctx.Backend, summary.WorkflowId, ServerWorkflowState.Completed);
 
                 var detail = await ctx.Backend.GetJobDetailAsync(summary.JobId, ctx.Token);
-                Assert.IsInstanceOfType<SongJobPayloadDto>(detail?.Payload, out var payload);
+                var payload = Assert.IsInstanceOfType<SongJobPayloadDto>(detail?.Payload);
                 Assert.AreNotEqual(ctx.Gate.BlockedUsername, payload.ResolvedUsername, ctx.Name);
             });
     }
@@ -288,7 +288,7 @@ public class CliBackendParityTests
                 var jobs = await ctx.Backend.GetJobsAsync(new JobQuery(null, null, null, summary.WorkflowId, IncludeAll: true), ctx.Token);
                 var song = jobs.Single(job => job.Kind == ServerJobKind.Song);
                 var detail = await ctx.Backend.GetJobDetailAsync(song.JobId, ctx.Token);
-                Assert.IsInstanceOfType<SongJobPayloadDto>(detail?.Payload, out var payload);
+                var payload = Assert.IsInstanceOfType<SongJobPayloadDto>(detail?.Payload);
                 Assert.AreNotEqual(ctx.Gate.BlockedUsername, payload.ResolvedUsername, ctx.Name);
             });
     }

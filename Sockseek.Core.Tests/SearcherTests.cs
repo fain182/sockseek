@@ -1526,7 +1526,7 @@ namespace Tests.Unit
             Assert.IsTrue(song2.ActivityUntilUtc.HasValue);
 
             cts.Cancel();
-            await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () => await task2);
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () => await task2);
         }
 
         private static void AssertPhaseOrder(IReadOnlyList<JobActivityPhase> phases, params JobActivityPhase[] expected)

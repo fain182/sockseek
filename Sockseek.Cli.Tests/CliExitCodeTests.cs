@@ -42,7 +42,7 @@ public class CliExitCodeTests
         try
         {
             var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-            var ex = Assert.ThrowsException<Sockseek.Cli.Program.DaemonEndpointUnavailableException>(() =>
+            var ex = Assert.ThrowsExactly<Sockseek.Cli.Program.DaemonEndpointUnavailableException>(() =>
                 Sockseek.Cli.Program.EnsureDaemonEndpointAvailable(new DaemonSettings
                 {
                     ListenIp = "127.0.0.1",

@@ -88,7 +88,6 @@ public class InteractiveModeManagerTests
     }
 
     [TestMethod]
-    [DataTestMethod]
     [DataRow('S', ConsoleKey.S)]
     [DataRow('Q', ConsoleKey.Q)]
     public async Task RestKeys_ReturnSkipRemainingNewPromptsAction(char keyChar, ConsoleKey key)
@@ -124,7 +123,7 @@ public class InteractiveModeManagerTests
         }
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow('s', ConsoleKey.S)]
     [DataRow('q', ConsoleKey.Q)]
     [DataRow('\u001b', ConsoleKey.Escape)]

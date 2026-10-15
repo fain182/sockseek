@@ -207,7 +207,7 @@ namespace Tests.ExtractorTests2
             Assert.AreEqual("myuser", song.Candidates[0].Response.Username);
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("slsk:///bad")]
         [DataRow("slsk://local/")]
         [DataRow("slsk://local")]
@@ -216,7 +216,7 @@ namespace Tests.ExtractorTests2
             var extractor = new SoulseekExtractor();
             var config = TestHelpers.CreateDefaultSettings().Download;
 
-            await Assert.ThrowsExceptionAsync<ArgumentException>(() => extractor.GetTracks(uri, config.Extraction));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() => extractor.GetTracks(uri, config.Extraction));
         }
     }
 
@@ -400,7 +400,7 @@ namespace Tests.ExtractorTests2
             config.Csv.TimeUnit = "bogus";
             var extractor = new CsvExtractor(config.Csv);
 
-            await Assert.ThrowsExceptionAsync<ArgumentException>(() => extractor.GetTracks(_tempCsv, config.Extraction));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() => extractor.GetTracks(_tempCsv, config.Extraction));
         }
 
         [TestMethod]
@@ -744,7 +744,7 @@ namespace Tests.ExtractorTests2
         [TestMethod]
         public void GetMatchingExtractor_EmptyInput_Throws()
         {
-            Assert.ThrowsException<ArgumentException>(() =>
+            Assert.ThrowsExactly<ArgumentException>(() =>
                 ExtractorRegistry.GetMatchingExtractor("", InputType.None, _dl));
         }
 

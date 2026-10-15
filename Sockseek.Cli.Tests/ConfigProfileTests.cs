@@ -214,7 +214,7 @@ namespace Tests.ConfigTests
 
             var (file, root, cli, args) = Bind(content);
 
-            Assert.ThrowsException<Exception>(() => ConfigManager.CreateJobSettingsResolver(file, args, cli));
+            Assert.ThrowsExactly<Exception>(() => ConfigManager.CreateJobSettingsResolver(file, args, cli));
         }
 
         [TestMethod]

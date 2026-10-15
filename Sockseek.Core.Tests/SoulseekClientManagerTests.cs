@@ -92,7 +92,7 @@ public class SoulseekClientManagerTests
         }
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(null, null, "Missing Soulseek username and password.")]
     [DataRow("bbbbbbb", null, "Missing Soulseek password.")]
     public async Task EnsureConnectedAndLoggedInAsync_FailsCleanly_WhenCredentialsAreMissing(
@@ -112,7 +112,7 @@ public class SoulseekClientManagerTests
 
         try
         {
-            var ex = await Assert.ThrowsExceptionAsync<SoulseekConnectionUnavailableException>(
+            var ex = await Assert.ThrowsExactlyAsync<SoulseekConnectionUnavailableException>(
                 () => manager.EnsureConnectedAndLoggedInAsync(settings));
 
             StringAssert.Contains(ex.Message, expectedMessage);
@@ -137,7 +137,7 @@ public class SoulseekClientManagerTests
             mockClient.RaiseKickedFromServer(disconnect: false);
 
             Assert.IsTrue(manager.HasFatalError);
-            await Assert.ThrowsExceptionAsync<SoulseekConnectionUnavailableException>(
+            await Assert.ThrowsExactlyAsync<SoulseekConnectionUnavailableException>(
                 () => manager.WaitUntilReadyAsync());
         }
         finally

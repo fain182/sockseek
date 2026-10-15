@@ -87,28 +87,28 @@ namespace Tests.OnCompleteExecutorTests
         [TestMethod]
         public void ParseCommand_MissingDelimiter_ThrowsHelpfulError()
         {
-            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("mycommand"));
+            var ex = Assert.ThrowsExactly<ArgumentException>(() => InvokeParseCommand("mycommand"));
             StringAssert.Contains(ex.Message, "Missing `--` command delimiter");
         }
 
         [TestMethod]
         public void ParseCommand_LegacyPrefixSyntax_ThrowsMigrationHint()
         {
-            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("1:a:h: mycommand"));
+            var ex = Assert.ThrowsExactly<ArgumentException>(() => InvokeParseCommand("1:a:h: mycommand"));
             StringAssert.Contains(ex.Message, "Legacy one-letter prefixes are no longer supported");
         }
 
         [TestMethod]
         public void ParseCommand_EmptyCommandAfterDelimiter_Throws()
         {
-            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("hidden -- "));
+            var ex = Assert.ThrowsExactly<ArgumentException>(() => InvokeParseCommand("hidden -- "));
             StringAssert.Contains(ex.Message, "Command after `--` is empty");
         }
 
         [TestMethod]
         public void ParseCommand_UnknownOption_Throws()
         {
-            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("bogus -- mycommand"));
+            var ex = Assert.ThrowsExactly<ArgumentException>(() => InvokeParseCommand("bogus -- mycommand"));
             StringAssert.Contains(ex.Message, "Unknown option `bogus`");
         }
     }

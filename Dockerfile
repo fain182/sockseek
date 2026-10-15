@@ -1,4 +1,4 @@
-FROM ghcr.io/linuxserver/baseimage-alpine:3.20 as base
+FROM ghcr.io/linuxserver/baseimage-alpine:3.24 as base
 
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine as build
 

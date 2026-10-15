@@ -53,7 +53,7 @@ public class RemoteCliBackendTests
         };
         var client = new SockseekApiClient(http);
 
-        var ex = await Assert.ThrowsExceptionAsync<SockseekApiRequestException>(
+        var ex = await Assert.ThrowsExactlyAsync<SockseekApiRequestException>(
             () => client.GetProfilesAsync(CancellationToken.None));
 
         StringAssert.Contains(ex.Message, "Bad request from daemon");
