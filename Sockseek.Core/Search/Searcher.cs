@@ -66,10 +66,6 @@ public partial class Searcher : IDisposable
 
         job.Discovery.RawResultCount = count;
         job.Discovery.LockedFileCount = locked;
-        // TODO [PERFORMANCE]: This currently publishes one discovery update per raw
-        // search result. Large real searches have shown measurable local CPU cost in
-        // the state-store/update path. Coalesce near this source by time/count, while
-        // still publishing an exact final update when the search completes.
         downloadEvents.RaiseJobDiscoveryChanged(job);
     }
 
@@ -85,8 +81,7 @@ public partial class Searcher : IDisposable
         var session = job.Session;
         var activityJob = phaseOwner ?? job;
         InitializeDiscoveryProgress(activityJob);
-        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(activityJob, session);
-        session.RawResultAdded += OnRawResultAdded;
+        using var progress = new DiscoveryProgress(this, activityJob, session);
 
         try
         {
@@ -107,7 +102,7 @@ public partial class Searcher : IDisposable
             activityJob.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
             responseData.resultCount = session.Results.Count;
             responseData.lockedFilesCount += session.LockedFileCount;
-            UpdateDiscoveryProgress(activityJob, session);
+            progress.Flush();
             if (!ReferenceEquals(activityJob, job))
                 job.Discovery = new DiscoverySummary { RawResultCount = session.Results.Count, LockedFileCount = session.LockedFileCount };
             session.Complete();
@@ -124,10 +119,6 @@ public partial class Searcher : IDisposable
                 session.Complete();
             throw;
         }
-        finally
-        {
-            session.RawResultAdded -= OnRawResultAdded;
-        }
     }
 
 
@@ -142,8 +133,7 @@ public partial class Searcher : IDisposable
     {
         var session = new SearchSession();
         InitializeDiscoveryProgress(song);
-        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(song, session);
-        session.RawResultAdded += OnRawResultAdded;
+        using var progress = new DiscoveryProgress(this, song, session);
 
         void responseHandler(SearchResponse r)
         {
@@ -180,7 +170,6 @@ public partial class Searcher : IDisposable
         }
         finally
         {
-            session.RawResultAdded -= OnRawResultAdded;
             concurrencySemaphore.Release();
         }
 
@@ -188,7 +177,7 @@ public partial class Searcher : IDisposable
         responseData.lockedFilesCount += session.LockedFileCount;
 
         responseData.resultCount = session.Results.Count;
-        UpdateDiscoveryProgress(song, session);
+        progress.Flush();
 
         SockseekLog.Soulseek.Debug($"{session.Results.Count} results found: {song}");
 
@@ -228,8 +217,7 @@ public partial class Searcher : IDisposable
     {
         var session = new SearchSession();
         InitializeDiscoveryProgress(job);
-        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(job, session);
-        session.RawResultAdded += OnRawResultAdded;
+        using var progress = new DiscoveryProgress(this, job, session);
 
         SearchOptions getOpts(int timeout, FileConditions nec, FileConditions prf) =>
             new(
@@ -245,13 +233,12 @@ public partial class Searcher : IDisposable
         try { await RunSearches(job.Query, session.Results, getOpts, session.AddResponse, search, ct, ownerJob: job); }
         finally
         {
-            session.RawResultAdded -= OnRawResultAdded;
             concurrencySemaphore.Release();
         }
 
         responseData.lockedFilesCount += session.LockedFileCount;
         responseData.resultCount = session.Results.Count;
-        UpdateDiscoveryProgress(job, session);
+        progress.Flush();
         job.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
         job.Songs = SearchResultProjector.AggregateTracks(session.Snapshot(), job.Query, search, userStats.UserSuccessCounts);
         return null;
@@ -668,7 +655,7 @@ public partial class Searcher : IDisposable
         var q = SearchQuery.FromText(search);
         ownerJob?.UpdateActivity(JobActivityPhase.Searching);
         onSearch?.Invoke();
-        await client.SearchAsync(q, options: opts, cancellationToken: ct, responseHandler: rHandler);
+        await SoulseekSearchRunner.RunAsync(client, q, opts, rHandler, ct ?? CancellationToken.None);
     }
 
     private static string GetSearchString(SongQuery query, bool isAlbum)

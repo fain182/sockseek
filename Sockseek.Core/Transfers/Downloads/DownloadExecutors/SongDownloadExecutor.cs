@@ -276,12 +276,14 @@ internal sealed class SongDownloadExecutor
                 using var searchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
 
                 Task<FileDownloadOutcome?>? fastDownloadTask = null;
+                var fastDownloadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                int fastCandidateAccepted = 0;
 
                 searched = true;
                 var searchTask = context.Runtime.Searcher.SearchSong(song, config.Search, responseData, searchCts.Token,
                     onFastSearchCandidate: fc =>
                     {
-                        if (fastDownloadTask == null)
+                        if (Interlocked.CompareExchange(ref fastCandidateAccepted, 1, 0) == 0)
                         {
                             SockseekLog.Jobs.Debug($"[{song.DisplayId}] SongJob: fast-search starting provisional download from {fc.Username}\\{fc.Filename}: {song}");
                             var target = context.OutputFinalizer.GetInitialDownloadTarget(config, song, organizer, fc);
@@ -303,15 +305,14 @@ internal sealed class SongDownloadExecutor
                                         return (FileDownloadOutcome?)t.Result;
                                     return null;
                                 }, TaskScheduler.Default);
+                            fastDownloadStarted.TrySetResult();
                         }
                     });
 
-                while (!searchTask.IsCompleted)
-                {
-                    if (fastDownloadTask != null && fastDownloadTask.IsCompleted)
-                        break;
-                    await Task.WhenAny(fastDownloadTask ?? searchTask, searchTask);
-                }
+                // Results may arrive asynchronously after SearchSong returns its
+                // task. Wake when a provisional download starts, rather than
+                // awaiting only search completion when none has started yet.
+                await Task.WhenAny(searchTask, fastDownloadStarted.Task);
 
                 if (fastDownloadTask != null)
                 {

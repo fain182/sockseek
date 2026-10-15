@@ -23,6 +23,7 @@ public sealed class SearchSession
 
     public event Action<SearchSession, SearchResponse, Soulseek.File>? RawResultReceived;
     public event Action<SearchSession, SearchRawResult>? RawResultAdded;
+    internal event Action<SearchSession>? ResponseAdded;
     public event Action<SearchSession>? Completed;
 
     public IReadOnlyCollection<(SearchResponse Response, Soulseek.File File)> Snapshot()
@@ -97,9 +98,6 @@ public sealed class SearchSession
     {
         Interlocked.Add(ref _lockedFileCount, response.LockedFileCount);
 
-        if (response.Files.Count == 0)
-            return;
-
         foreach (var file in response.Files)
         {
             if (Results.TryAdd(response.Username + '\\' + file.Filename, (response, file)))
@@ -114,6 +112,8 @@ public sealed class SearchSession
                 RawResultAdded?.Invoke(this, rawResult);
             }
         }
+
+        ResponseAdded?.Invoke(this);
     }
 
     public void Complete()

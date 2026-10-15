@@ -38,6 +38,7 @@ namespace Tests.ClientTests
         public bool BrowseReturnsBasenames { get; set; }
         public bool IsDisposed { get; private set; }
         public Exception? ConnectException { get; set; }
+        public Func<SearchQuery, Action<SearchResponse>, SearchOptions, CancellationToken, Task<Search>>? SearchHandler { get; set; }
 
         public void FailNextDownloadWithDisconnect(string username)
             => disconnectingUsers.Add(username);
@@ -205,6 +206,9 @@ namespace Tests.ClientTests
 
         public Task<Search> SearchAsync(SearchQuery query, Action<SearchResponse> responseHandler, SearchScope? scope = null, int? token = null, SearchOptions? options = null, CancellationToken? cancellationToken = null)
         {
+            if (SearchHandler != null)
+                return SearchHandler(query, responseHandler, options ?? new SearchOptions(), cancellationToken ?? CancellationToken.None);
+
             return SearchAsyncInternal(query, responseHandler, scope, token, options, cancellationToken).ContinueWith(t => t.Result.Search);
         }
 

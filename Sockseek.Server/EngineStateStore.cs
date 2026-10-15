@@ -347,11 +347,15 @@ public sealed class EngineStateStore
     private void OnJobDiscoveryChanged(Job job)
     {
         List<JobSummaryDto> summaries = [];
+        SearchUpdatedDto? searchUpdate = null;
         lock (gate)
         {
             if (jobs.ContainsKey(job.Id))
             {
                 summaries.Add(UpdateJobRecord(job).Summary);
+                if (job is SearchJob searchJob)
+                    searchUpdate = new SearchUpdatedDto(searchJob.Id, searchJob.WorkflowId,
+                        searchJob.Revision, searchJob.ResultCount, searchJob.IsComplete);
             }
             else
             {
@@ -365,6 +369,8 @@ public sealed class EngineStateStore
             return;
 
         PublishJobAndWorkflowUpserts(summaries, []);
+        if (searchUpdate != null)
+            SearchUpdated?.Invoke(searchUpdate);
     }
 
     private void OnJobExecutionCompleted(Job job)
@@ -427,32 +433,7 @@ public sealed class EngineStateStore
 
     private void SubscribeToSearchJob(SearchJob searchJob)
     {
-        searchJob.Session.RawResultAdded += OnSearchRawResultAdded;
         searchJob.Session.Completed += OnSearchCompleted;
-    }
-
-    private void OnSearchRawResultAdded(SearchSession session, SearchRawResult rawResult)
-    {
-        SearchJob? searchJob;
-        lock (gate)
-        {
-            searchJob = jobs.Values
-                .OfType<SearchJob>()
-                .FirstOrDefault(job => ReferenceEquals(job.Session, session));
-
-            if (searchJob != null)
-                UpdateJobRecord(searchJob);
-        }
-
-        if (searchJob == null)
-            return;
-
-        SearchUpdated?.Invoke(new SearchUpdatedDto(
-            searchJob.Id,
-            searchJob.WorkflowId,
-            rawResult.Revision,
-            searchJob.ResultCount,
-            false));
     }
 
     private void OnSearchCompleted(SearchSession session)

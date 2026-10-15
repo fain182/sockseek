@@ -136,7 +136,8 @@ namespace Tests.Unit
 
             await searcher.SearchAlbum(album, settings.Search, new ResponseData(), CancellationToken.None);
 
-            CollectionAssert.AreEqual(new[] { 1, 2 }, counts);
+            Assert.IsTrue(counts.Count > 0, "The visible album job must receive discovery progress.");
+            Assert.AreEqual(2, counts[^1], "The final progress count must include every result.");
             Assert.AreEqual(2, album.Discovery?.RawResultCount);
             Assert.AreEqual(1, album.Results.Count);
         }
