@@ -5,4 +5,5 @@ public class RemoteSettings
 {
     public string? ServerUrl { get; set; }
     public bool IsEnabled => !string.IsNullOrWhiteSpace(ServerUrl);
+    public bool Detach { get; set; }
 }

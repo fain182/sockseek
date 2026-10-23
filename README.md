@@ -314,6 +314,8 @@ sockseek daemon --server-ip 0.0.0.0 --server-port 5030
 sockseek "Artist - Title" --remote http://127.0.0.1:5030
 ```
 
+Add `--detach` to submit the job, print its workflow ID, and exit without waiting for it to finish.
+
 For HTTP API, SignalR, and client integration notes, see [docs/api.md](docs/api.md).
 <!-- sockseek-help:end -->
 
@@ -822,6 +824,7 @@ sockseek daemon                 Start the HTTP/SignalR daemon instead of running
 --server-ip <ip>                IP/interface for the daemon HTTP API (default: 127.0.0.1)
 --server-port <port>            Port for the daemon HTTP API (default: 5030)
 --remote <url>                  Use an existing daemon instead of running locally
+--detach                        With --remote, submit and print the workflow ID without waiting
 ```
 #### Search Options
 ```

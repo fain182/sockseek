@@ -858,6 +858,13 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
+        public void Detach_SetsRemoteDetach()
+        {
+            Assert.IsTrue(BindAll("--remote", "http://127.0.0.1:5030", "--detach").remote.Detach);
+            Assert.IsFalse(BindAll("--remote", "http://127.0.0.1:5030").remote.Detach);
+        }
+
+        [TestMethod]
         public void RemoteSubmissionOptions_DoNotOverrideServerPathByDefault()
         {
             var options = Sockseek.Cli.Program.BuildRemoteSubmissionOptions(
