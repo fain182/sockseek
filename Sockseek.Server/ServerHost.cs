@@ -12,7 +12,11 @@ public static class ServerHost
 {
     public static WebApplication Build(string[] args, ServerOptions? options = null, string? url = null, bool logToConsole = true)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
         builder.Logging.ClearProviders();
         if (logToConsole)
         {
