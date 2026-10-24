@@ -153,6 +153,12 @@ internal static partial class Program
             return CliExitCode.Success;
         }
 
+        if (remoteSettings.Detach && (!remoteSettings.IsEnabled || cliSettings.InteractiveMode))
+        {
+            SockseekLog.Error("Input error: --detach requires --remote and cannot be used with interactive mode.");
+            return CliExitCode.UsageError;
+        }
+
         LogCliSessionStart(remoteSettings);
 
         using var cts = new CancellationTokenSource();
@@ -472,6 +478,19 @@ internal static partial class Program
             return CliExitCode.UsageError;
         }
 
+        if (remoteSettings.Detach)
+        {
+            using var http = SockseekApiClient.CreateHttpClient(remoteSettings.ServerUrl!);
+            var detached = await new SockseekApiClient(http).SubmitExtractJobAsync(
+                BuildRemoteExtractRequest(rootSettings, BuildRemoteSubmissionOptions(args, cliSettings)),
+                cts.Token);
+            if (cliSettings.ProgressJson)
+                new JsonStreamProgressReporter(Console.Out).ReportWorkflowSubmitted(detached.WorkflowId);
+            else
+                Console.WriteLine(detached.WorkflowId);
+            return LogCliSessionExit(CliExitCode.Success, remoteSettings);
+        }
+
         await using var backend = new RemoteCliBackend(remoteSettings.ServerUrl!);
         await backend.StartAsync(cts.Token);
 
@@ -507,10 +526,7 @@ internal static partial class Program
             using var terminalUpdateObserver = new WorkflowTerminalUpdateObserver(backend, workflowId);
 
             var options = BuildRemoteSubmissionOptions(args, cliSettings) with { WorkflowId = workflowId };
-            var request = new SubmitExtractJobRequestDto(
-                rootSettings.Extraction.Input,
-                rootSettings.Extraction.InputType.ToString(),
-                Options: options);
+            var request = BuildRemoteExtractRequest(rootSettings, options);
 
             InteractiveCliCoordinator? interactiveCoordinator = null;
             JobSummaryDto submission;
@@ -1360,6 +1376,12 @@ internal static partial class Program
                 ["no-progress"] = cliSettings.NoProgress,
             },
             DownloadSettings: ConfigManager.CreateCliDownloadSettingsPatch(args));
+
+    private static SubmitExtractJobRequestDto BuildRemoteExtractRequest(DownloadSettings rootSettings, SubmissionOptionsDto options)
+        => new(
+            rootSettings.Extraction.Input!,
+            rootSettings.Extraction.InputType.ToString(),
+            Options: options);
 
     private static string[]? SplitProfileNames(string? names)
         => string.IsNullOrWhiteSpace(names)

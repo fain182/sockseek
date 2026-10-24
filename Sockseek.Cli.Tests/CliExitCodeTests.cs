@@ -3,6 +3,7 @@ using Sockseek.Cli;
 using Sockseek.Core;
 using Sockseek.Core.Jobs;
 using Sockseek.Core.Models;
+using Sockseek.Core.Settings;
 using System.Text.Json;
 
 namespace Tests.Cli;
@@ -32,6 +33,75 @@ public class CliExitCodeTests
         var exitCode = await Sockseek.Cli.Program.MainCore(["daemon", "--no-config", "--server-port", "70000"]);
 
         Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.UsageError, exitCode);
+    }
+
+    [TestMethod]
+    public async Task MainCore_DetachWithoutRemote_ReturnsUsageError()
+    {
+        var exitCode = await Sockseek.Cli.Program.MainCore(["Artist - Song", "--no-config", "--detach"]);
+
+        Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.UsageError, exitCode);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task MainCore_RemoteDetach_SubmitsWorkflowAndReturnsSuccess(bool progressJson)
+    {
+        var musicRoot = Path.Combine(Path.GetTempPath(), "Sockseek-detach-music-" + Guid.NewGuid());
+        var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-detach-out-" + Guid.NewGuid());
+        Directory.CreateDirectory(musicRoot);
+        Directory.CreateDirectory(outputDir);
+        File.WriteAllBytes(Path.Combine(musicRoot, "Artist - Song.mp3"), [1, 2, 3, 4]);
+
+        var originalOut = Console.Out;
+        using var stdout = new StringWriter();
+        await using var app = TestServerHost.Build([], new Sockseek.Server.ServerOptions
+        {
+            Engine = new EngineSettings { MockFilesDir = musicRoot, MockFilesReadTags = false },
+            DefaultDownload = new DownloadSettings { Output = { ParentDir = outputDir } },
+        }, "http://127.0.0.1:0");
+        try
+        {
+            await app.StartAsync();
+            var url = app.Urls.Single();
+
+            Console.SetOut(stdout);
+            var exitCode = await Sockseek.Cli.Program.MainCore([
+                "Artist - Song",
+                "--song",
+                "--no-config",
+                "--remote", url,
+                "--detach",
+                "--progress-json", progressJson.ToString().ToLowerInvariant(),
+            ]);
+            Console.SetOut(originalOut);
+
+            Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.Success, exitCode);
+            var printed = stdout.ToString().Trim();
+            Guid workflowId;
+            if (progressJson)
+            {
+                using var document = JsonDocument.Parse(printed);
+                Assert.AreEqual("workflow_submitted", document.RootElement.GetProperty("type").GetString());
+                workflowId = document.RootElement.GetProperty("data").GetProperty("workflowId").GetGuid();
+            }
+            else
+            {
+                Assert.IsTrue(Guid.TryParse(printed, out workflowId), $"Expected only a workflow ID, got '{printed}'");
+            }
+
+            await using var backend = new RemoteCliBackend(url);
+            await backend.StartAsync();
+            Assert.IsNotNull(await backend.GetWorkflowAsync(workflowId));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            await app.StopAsync();
+            if (Directory.Exists(musicRoot)) Directory.Delete(musicRoot, true);
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+        }
     }
 
     [TestMethod]

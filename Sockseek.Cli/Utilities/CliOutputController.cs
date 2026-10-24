@@ -40,7 +40,7 @@ internal sealed class CliOutputController : IDisposable
     {
         var controller = new CliOutputController(
             installedConsoleSink: true,
-            forceHumanLogsToError: ArgsRequestProgressJson(args));
+            forceHumanLogsToError: ArgsRequestProgressJson(args) || ArgsRequestFlag(args, "--detach"));
         controller.AttachConsoleSink();
         return controller;
     }
@@ -60,15 +60,18 @@ internal sealed class CliOutputController : IDisposable
     }
 
     public static bool ArgsRequestProgressJson(IReadOnlyList<string> args)
+        => ArgsRequestFlag(args, "--progress-json");
+
+    private static bool ArgsRequestFlag(IReadOnlyList<string> args, string flag)
     {
         for (var i = 0; i < args.Count; i++)
         {
             var arg = args[i];
-            if (arg.Equals("--progress-json", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals(flag, StringComparison.OrdinalIgnoreCase))
                 return i + 1 >= args.Count || !args[i + 1].Equals("false", StringComparison.OrdinalIgnoreCase);
 
-            if (arg.StartsWith("--progress-json=", StringComparison.OrdinalIgnoreCase))
-                return !arg["--progress-json=".Length..].Equals("false", StringComparison.OrdinalIgnoreCase);
+            if (arg.StartsWith(flag + "=", StringComparison.OrdinalIgnoreCase))
+                return !arg[(flag.Length + 1)..].Equals("false", StringComparison.OrdinalIgnoreCase);
         }
 
         return false;

@@ -82,6 +82,7 @@ public static partial class Help
     --server-ip <ip>                IP/interface for the daemon HTTP API (default: 127.0.0.1)
     --server-port <port>            Port for the daemon HTTP API (default: 5030)
     --remote <url>                  Use an existing daemon instead of running locally
+    --detach                        With --remote, submit and print the workflow ID without waiting
 
   Search Options
 

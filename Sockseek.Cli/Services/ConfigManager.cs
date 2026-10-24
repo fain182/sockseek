@@ -563,6 +563,8 @@ public static partial class ConfigManager
                 Daemon(d => d.ListenPort = Port()); break;
             case "--remote": case "--server-url":
                 Remote(r => r.ServerUrl = value); break;
+            case "--detach":
+                Remote(r => r.Detach = Bool()); break;
 
             // ── OutputSettings ───────────────────────────────────────────────
             case "-o":
