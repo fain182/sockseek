@@ -44,7 +44,9 @@ public class CliExitCodeTests
     }
 
     [TestMethod]
-    public async Task MainCore_RemoteDetach_SubmitsWorkflowAndReturnsSuccess()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task MainCore_RemoteDetach_SubmitsWorkflowAndReturnsSuccess(bool progressJson)
     {
         var musicRoot = Path.Combine(Path.GetTempPath(), "Sockseek-detach-music-" + Guid.NewGuid());
         var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-detach-out-" + Guid.NewGuid());
@@ -71,12 +73,23 @@ public class CliExitCodeTests
                 "--no-config",
                 "--remote", url,
                 "--detach",
+                "--progress-json", progressJson.ToString().ToLowerInvariant(),
             ]);
             Console.SetOut(originalOut);
 
             Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.Success, exitCode);
-            var lastLine = stdout.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Last();
-            Assert.IsTrue(Guid.TryParse(lastLine, out var workflowId), $"Expected a workflow ID, got '{lastLine}'");
+            var printed = stdout.ToString().Trim();
+            Guid workflowId;
+            if (progressJson)
+            {
+                using var document = JsonDocument.Parse(printed);
+                Assert.AreEqual("workflow_submitted", document.RootElement.GetProperty("type").GetString());
+                workflowId = document.RootElement.GetProperty("data").GetProperty("workflowId").GetGuid();
+            }
+            else
+            {
+                Assert.IsTrue(Guid.TryParse(printed, out workflowId), $"Expected only a workflow ID, got '{printed}'");
+            }
 
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();

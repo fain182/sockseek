@@ -478,17 +478,21 @@ internal static partial class Program
             return CliExitCode.UsageError;
         }
 
-        await using var backend = new RemoteCliBackend(remoteSettings.ServerUrl!);
-        await backend.StartAsync(cts.Token);
-
         if (remoteSettings.Detach)
         {
-            var detached = await backend.SubmitExtractJobAsync(
+            using var http = SockseekApiClient.CreateHttpClient(remoteSettings.ServerUrl!);
+            var detached = await new SockseekApiClient(http).SubmitExtractJobAsync(
                 BuildRemoteExtractRequest(rootSettings, BuildRemoteSubmissionOptions(args, cliSettings)),
                 cts.Token);
-            Console.WriteLine(detached.WorkflowId);
+            if (cliSettings.ProgressJson)
+                new JsonStreamProgressReporter(Console.Out).ReportWorkflowSubmitted(detached.WorkflowId);
+            else
+                Console.WriteLine(detached.WorkflowId);
             return LogCliSessionExit(CliExitCode.Success, remoteSettings);
         }
+
+        await using var backend = new RemoteCliBackend(remoteSettings.ServerUrl!);
+        await backend.StartAsync(cts.Token);
 
         CliProgressReporter? cliReporter = null;
         if (cliSettings.ProgressJson)
