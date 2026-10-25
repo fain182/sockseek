@@ -49,28 +49,27 @@ namespace Sockseek.Core.Extractors;
             entries = entries.Skip(extraction.Offset).Take(extraction.MaxTracks).ToList();
 
             // The playlist response only embeds full metadata for the first few tracks; the rest are bare ids.
-            var missingIds = entries.Where(e => !e.Track.TryGetProperty("title", out _))
-                .Select(e => e.Track.GetProperty("id").GetInt64())
-                .ToList();
+            var missingIds = entries.Where(e => IsStub(e.Track)).Select(e => Id(e.Track)).ToList();
 
             var details = new Dictionary<long, JsonElement>();
             foreach (var batch in missingIds.Chunk(TracksPerRequest))
             {
                 var tracks = await GetJson(httpClient, $"{ApiBase}/tracks?ids={string.Join(',', batch)}");
                 foreach (var track in tracks.EnumerateArray())
-                    details[track.GetProperty("id").GetInt64()] = track;
+                    details[Id(track)] = track;
             }
 
             var result = new JobList { ItemName = playlist.GetProperty("title").GetString(), EnablesIndexByDefault = true };
             foreach (var (number, entry) in entries)
             {
-                var track = entry;
-                if (!track.TryGetProperty("title", out _) && !details.TryGetValue(track.GetProperty("id").GetInt64(), out track))
+                JsonElement? track = !IsStub(entry) ? entry
+                    : details.TryGetValue(Id(entry), out var fetched) ? fetched : null;
+                if (track is not { } full)
                 {
                     context.Log.Warn($"Skipping playlist track {number}: SoundCloud returned no details for it (removed or private).");
                     continue;
                 }
-                result.Jobs.Add(ToSongJob(track, number));
+                result.Jobs.Add(ToSongJob(full, number));
             }
 
             return result;
@@ -78,25 +77,26 @@ namespace Sockseek.Core.Extractors;
 
         internal static SongJob ToSongJob(JsonElement track, int itemNumber)
         {
-            string? publisherArtist = null;
-            if (track.TryGetProperty("publisher_metadata", out var publisher) && publisher.ValueKind == JsonValueKind.Object
-                && publisher.TryGetProperty("artist", out var artist))
-                publisherArtist = artist.GetString();
-
-            bool hasPublisherArtist = !string.IsNullOrWhiteSpace(publisherArtist);
-            int durationMs = track.TryGetProperty("duration", out var duration) ? duration.GetInt32() : -1;
+            var publisherArtist = track.TryGetProperty("publisher_metadata", out var publisher) && publisher.ValueKind == JsonValueKind.Object
+                && publisher.TryGetProperty("artist", out var artist) ? artist.GetString() : null;
+            if (string.IsNullOrWhiteSpace(publisherArtist))
+                publisherArtist = null;
 
             var query = new SongQuery
             {
-                Artist = hasPublisherArtist ? publisherArtist! : track.GetProperty("user").GetProperty("username").GetString() ?? "",
+                Artist = publisherArtist ?? track.GetProperty("user").GetProperty("username").GetString() ?? "",
                 Title = track.GetProperty("title").GetString() ?? "",
                 URI = track.TryGetProperty("permalink_url", out var url) ? url.GetString() ?? "" : "",
-                Length = durationMs >= 0 ? durationMs / 1000 : -1,
-                ArtistMaybeWrong = !hasPublisherArtist,
+                Length = track.TryGetProperty("duration", out var duration) ? duration.GetInt32() / 1000 : -1,
+                ArtistMaybeWrong = publisherArtist == null,
             };
 
             return new SongJob(query) { ItemNumber = itemNumber };
         }
+
+        private static bool IsStub(JsonElement track) => !track.TryGetProperty("title", out _);
+
+        private static long Id(JsonElement track) => track.GetProperty("id").GetInt64();
 
         private static async Task<JsonElement> GetJson(HttpClient httpClient, string url)
         {
@@ -104,6 +104,7 @@ namespace Sockseek.Core.Extractors;
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 throw new InvalidOperationException($"SoundCloud rejected the request ({(int)response.StatusCode}); check that the OAuth token is valid.");
             response.EnsureSuccessStatusCode();
-            return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            return (await JsonDocument.ParseAsync(stream)).RootElement;
         }
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Sockseek.Core;
 using Sockseek.Core.Extractors;
 using Sockseek.Core.Settings;
 
@@ -52,9 +53,9 @@ public class SoundCloudExtractorTests
     public void SoundCloudUrl_SelectsSoundCloudExtractor()
     {
         var (type, extractor) = ExtractorRegistry.GetMatchingExtractor(
-            "https://soundcloud.com/artist/sets/playlist", Sockseek.Core.InputType.None, new DownloadSettings());
+            "https://soundcloud.com/artist/sets/playlist", InputType.None, new DownloadSettings());
 
-        Assert.AreEqual(Sockseek.Core.InputType.SoundCloud, type);
+        Assert.AreEqual(InputType.SoundCloud, type);
         Assert.IsInstanceOfType<SoundCloudExtractor>(extractor);
     }
 
