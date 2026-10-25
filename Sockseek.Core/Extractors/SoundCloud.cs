@@ -33,14 +33,16 @@ namespace Sockseek.Core.Extractors;
             using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("OAuth", _soundCloud.AuthToken);
 
-            context.Log.Info("Loading playlist..");
-            var playlist = await GetJson(httpClient, $"{ApiBase}/resolve?url={Uri.EscapeDataString(input.Trim())}");
+            context.Log.Info("Loading item..");
+            var resolved = await GetJson(httpClient, $"{ApiBase}/resolve?url={Uri.EscapeDataString(input.Trim())}");
 
-            var kind = playlist.GetProperty("kind").GetString();
+            var kind = resolved.GetProperty("kind").GetString();
+            if (kind == "track")
+                return ToSongJob(resolved, 1);
             if (kind != "playlist")
-                throw new NotSupportedException($"Only SoundCloud playlists are supported, but the URL points to a {kind}.");
+                throw new NotSupportedException($"Only SoundCloud tracks and playlists are supported, but the URL points to a {kind}.");
 
-            var entries = playlist.GetProperty("tracks").EnumerateArray()
+            var entries = resolved.GetProperty("tracks").EnumerateArray()
                 .Select((track, index) => (Number: index + 1, Track: track))
                 .ToList();
 
@@ -59,7 +61,7 @@ namespace Sockseek.Core.Extractors;
                     details[Id(track)] = track;
             }
 
-            var result = new JobList { ItemName = playlist.GetProperty("title").GetString(), EnablesIndexByDefault = true };
+            var result = new JobList { ItemName = resolved.GetProperty("title").GetString(), EnablesIndexByDefault = true };
             foreach (var (number, entry) in entries)
             {
                 JsonElement? track = !IsStub(entry) ? entry
