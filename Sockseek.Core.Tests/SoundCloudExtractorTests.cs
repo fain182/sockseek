@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sockseek.Core;
@@ -57,6 +58,19 @@ public class SoundCloudExtractorTests
             () => extractor.GetTracks("https://soundcloud.com/artist/sets/playlist", new ExtractionSettings()));
 
         StringAssert.Contains(error.Message, "--soundcloud-token");
+    }
+
+    [TestMethod]
+    [DataRow(HttpStatusCode.TooManyRequests, "rate limiting")]
+    [DataRow(HttpStatusCode.Unauthorized, "OAuth token")]
+    [DataRow(HttpStatusCode.Forbidden, "OAuth token")]
+    public void ErrorResponse_ReportsCause(HttpStatusCode status, string expected)
+    {
+        using var response = new HttpResponseMessage(status);
+
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => SoundCloudExtractor.EnsureSuccess(response));
+
+        StringAssert.Contains(error.Message, expected);
     }
 
     [TestMethod]

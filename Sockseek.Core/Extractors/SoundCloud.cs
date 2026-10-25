@@ -103,10 +103,17 @@ namespace Sockseek.Core.Extractors;
         private static async Task<JsonElement> GetJson(HttpClient httpClient, string url)
         {
             using var response = await httpClient.GetAsync(url);
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                throw new InvalidOperationException($"SoundCloud rejected the request ({(int)response.StatusCode}); check that the OAuth token is valid.");
-            response.EnsureSuccessStatusCode();
+            EnsureSuccess(response);
             await using var stream = await response.Content.ReadAsStreamAsync();
             return (await JsonDocument.ParseAsync(stream)).RootElement;
+        }
+
+        internal static void EnsureSuccess(HttpResponseMessage response)
+        {
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                throw new InvalidOperationException($"SoundCloud rejected the request ({(int)response.StatusCode}); check that the OAuth token is valid.");
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                throw new InvalidOperationException("SoundCloud is rate limiting requests (429); try again later.");
+            response.EnsureSuccessStatusCode();
         }
     }
