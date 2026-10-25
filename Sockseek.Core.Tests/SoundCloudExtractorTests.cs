@@ -45,7 +45,7 @@ public class SoundCloudExtractorTests
         var job = SoundCloudExtractor.ToSongJob(Track(json), 1);
 
         Assert.AreEqual("uploader", job.Query.Artist);
-        Assert.IsTrue(job.Query.ArtistMaybeWrong);
+        Assert.IsFalse(job.Query.ArtistMaybeWrong);
         Assert.AreEqual(-1, job.Query.Length);
     }
 

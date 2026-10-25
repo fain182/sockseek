@@ -104,7 +104,6 @@ namespace Sockseek.Core.Extractors;
                 // For snippet-only tracks (e.g. Go+), `duration` is the ~30s snippet; `full_duration` is the whole track.
                 Length = track.TryGetProperty("full_duration", out var duration) || track.TryGetProperty("duration", out duration)
                     ? duration.GetInt32() / 1000 : -1,
-                ArtistMaybeWrong = publisherArtist == null,
             };
 
             return new SongJob(query) { ItemNumber = itemNumber };
