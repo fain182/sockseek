@@ -353,10 +353,11 @@ Input types
       within the collection.
 
   SoundCloud
-    A public SoundCloud playlist URL (https://soundcloud.com/<user>/sets/<playlist>). Requires a
-    SoundCloud OAuth token, passed with --soundcloud-token (the same auth_token used by scdl). When
-    a track has no publisher artist, the uploader's name is used as the artist (and removed from the
-    start of titles like ""Uploader - Title"") and --artist-maybe-wrong is set for that track.
+    A SoundCloud playlist URL (https://soundcloud.com/<user>/sets/<playlist>). Public playlists and
+    private playlists of the account the token belongs to are supported. Requires a SoundCloud OAuth
+    token, passed with --soundcloud-token (the same auth_token used by scdl). When a track has no
+    publisher artist, the artist is taken from titles like ""Artist - Title"", falling back to the
+    uploader's name, and --artist-maybe-wrong is set for that track.
 
   Soulseek Link
     A direct path starting with slsk://. Paths ending in / are album/folder downloads; file paths
