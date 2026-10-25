@@ -82,14 +82,21 @@ namespace Sockseek.Core.Extractors;
             if (string.IsNullOrWhiteSpace(publisherArtist))
                 publisherArtist = null;
 
-            var uploader = track.GetProperty("user").GetProperty("username").GetString() ?? "";
+            var artistName = track.GetProperty("user").GetProperty("username").GetString() ?? "";
             var title = track.GetProperty("title").GetString() ?? "";
-            if (publisherArtist == null && uploader.Length > 0 && title.StartsWith(uploader + " - ", StringComparison.OrdinalIgnoreCase))
-                title = title[(uploader.Length + 3)..];
+            if (publisherArtist == null)
+            {
+                if (artistName.Length > 0 && title.StartsWith(artistName + " - ", StringComparison.OrdinalIgnoreCase))
+                    title = title[(artistName.Length + 3)..];
+
+                var (titleArtist, splitTitle) = Utils.SplitArtistAndTitle(title);
+                if (titleArtist != null)
+                    (artistName, title) = (titleArtist, splitTitle);
+            }
 
             var query = new SongQuery
             {
-                Artist = publisherArtist ?? uploader,
+                Artist = publisherArtist ?? artistName,
                 Title = title,
                 URI = track.TryGetProperty("permalink_url", out var url) ? url.GetString() ?? "" : "",
                 // For snippet-only tracks (e.g. Go+), `duration` is the ~30s snippet; `full_duration` is the whole track.

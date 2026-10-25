@@ -50,18 +50,22 @@ public class SoundCloudExtractorTests
     }
 
     [TestMethod]
-    [DataRow("The Royal Concept - Gimme Twice", null, "Gimme Twice")]
-    [DataRow("the royal concept - Gimme Twice", null, "Gimme Twice")]
-    [DataRow("Someone Else - Gimme Twice", null, "Someone Else - Gimme Twice")]
-    [DataRow("The Royal Concept - Gimme Twice", "Publisher Artist", "The Royal Concept - Gimme Twice")]
-    public void UploaderPrefix_IsStrippedOnlyWhenUploaderIsTheArtist(string title, string? publisherArtist, string expected)
+    [DataRow("The Royal Concept - Gimme Twice", null, "The Royal Concept", "Gimme Twice")]
+    [DataRow("the royal concept - Gimme Twice", null, "The Royal Concept", "Gimme Twice")]
+    [DataRow("Rihanna - BBHMM (Lokal Bootleg)", null, "Rihanna", "BBHMM (Lokal Bootleg)")]
+    [DataRow("The Royal Concept - Rihanna - BBHMM", null, "Rihanna", "BBHMM")]
+    [DataRow("A - B - C", null, "The Royal Concept", "A - B - C")]
+    [DataRow("Gorilla (Sammy Virji - Remix)", null, "The Royal Concept", "Gorilla (Sammy Virji - Remix)")]
+    [DataRow("Rihanna - BBHMM", "Publisher Artist", "Publisher Artist", "Rihanna - BBHMM")]
+    public void TitleArtist_IsUsedOnlyWithoutPublisherArtist(string title, string? publisherArtist, string expectedArtist, string expectedTitle)
     {
         var publisher = publisherArtist == null ? "null" : $$"""{"artist": "{{publisherArtist}}"}""";
         var job = SoundCloudExtractor.ToSongJob(Track($$"""
             {"id": 1, "title": "{{title}}", "user": {"username": "The Royal Concept"}, "publisher_metadata": {{publisher}}}
             """), 1);
 
-        Assert.AreEqual(expected, job.Query.Title);
+        Assert.AreEqual(expectedArtist, job.Query.Artist);
+        Assert.AreEqual(expectedTitle, job.Query.Title);
     }
 
     [TestMethod]
