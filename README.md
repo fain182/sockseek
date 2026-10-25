@@ -215,7 +215,26 @@ A MusicBrainz.org URL for a release, release group, or collection.
 
 ### SoundCloud
 
-A SoundCloud track or playlist URL (`https://soundcloud.com/<user>/<track>` or `https://soundcloud.com/<user>/sets/<playlist>`). Public items and private playlists of the account the token belongs to are supported. Requires a SoundCloud OAuth token, passed with `--soundcloud-token` (the same `auth_token` used by scdl). When a track has no publisher artist, the artist is taken from titles like "Artist - Title", falling back to the uploader's name. A title that starts with the track's artist followed by " - " has that prefix removed.
+A SoundCloud track or playlist URL (`https://soundcloud.com/<user>/<track>` or `https://soundcloud.com/<user>/sets/<playlist>`). Public items and private playlists of the account the token belongs to are supported. Requires a SoundCloud OAuth token, passed with `--soundcloud-token`, also for public items.
+
+When a track has no publisher artist, the artist is taken from titles like "Artist - Title", falling back to the uploader's name. A leading "Artist - " that repeats the track's artist is removed from the title.
+
+#### Getting the OAuth token
+
+<details>
+  <summary>Click to expand</summary>
+
+1. Log in to https://soundcloud.com in your browser.
+2. Open the developer tools (F12) and go to the Storage tab (Application in Chrome).
+3. Under Cookies > https://soundcloud.com, copy the value of `oauth_token`.
+
+Pass it with `--soundcloud-token`, or put it in your config file:
+
+```
+soundcloud-token = <your-token>
+```
+
+</details>
 
 ### Soulseek Link
 
