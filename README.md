@@ -215,7 +215,7 @@ A MusicBrainz.org URL for a release, release group, or collection.
 
 ### SoundCloud
 
-A public SoundCloud playlist URL (`https://soundcloud.com/<user>/sets/<playlist>`). Requires a SoundCloud OAuth token, passed with `--soundcloud-token` (the same `auth_token` used by scdl). When a track has no publisher artist, the uploader's name is used as the artist and `--artist-maybe-wrong` is set for that track.
+A public SoundCloud playlist URL (`https://soundcloud.com/<user>/sets/<playlist>`). Requires a SoundCloud OAuth token, passed with `--soundcloud-token` (the same `auth_token` used by scdl). When a track has no publisher artist, the uploader's name is used as the artist (and removed from the start of titles like "Uploader - Title") and `--artist-maybe-wrong` is set for that track.
 
 ### Soulseek Link
 
