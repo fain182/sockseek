@@ -82,10 +82,15 @@ namespace Sockseek.Core.Extractors;
             if (string.IsNullOrWhiteSpace(publisherArtist))
                 publisherArtist = null;
 
+            var uploader = track.GetProperty("user").GetProperty("username").GetString() ?? "";
+            var title = track.GetProperty("title").GetString() ?? "";
+            if (publisherArtist == null && uploader.Length > 0 && title.StartsWith(uploader + " - ", StringComparison.OrdinalIgnoreCase))
+                title = title[(uploader.Length + 3)..];
+
             var query = new SongQuery
             {
-                Artist = publisherArtist ?? track.GetProperty("user").GetProperty("username").GetString() ?? "",
-                Title = track.GetProperty("title").GetString() ?? "",
+                Artist = publisherArtist ?? uploader,
+                Title = title,
                 URI = track.TryGetProperty("permalink_url", out var url) ? url.GetString() ?? "" : "",
                 // For snippet-only tracks (e.g. Go+), `duration` is the ~30s snippet; `full_duration` is the whole track.
                 Length = track.TryGetProperty("full_duration", out var duration) || track.TryGetProperty("duration", out duration)

@@ -50,6 +50,21 @@ public class SoundCloudExtractorTests
     }
 
     [TestMethod]
+    [DataRow("The Royal Concept - Gimme Twice", null, "Gimme Twice")]
+    [DataRow("the royal concept - Gimme Twice", null, "Gimme Twice")]
+    [DataRow("Someone Else - Gimme Twice", null, "Someone Else - Gimme Twice")]
+    [DataRow("The Royal Concept - Gimme Twice", "Publisher Artist", "The Royal Concept - Gimme Twice")]
+    public void UploaderPrefix_IsStrippedOnlyWhenUploaderIsTheArtist(string title, string? publisherArtist, string expected)
+    {
+        var publisher = publisherArtist == null ? "null" : $$"""{"artist": "{{publisherArtist}}"}""";
+        var job = SoundCloudExtractor.ToSongJob(Track($$"""
+            {"id": 1, "title": "{{title}}", "user": {"username": "The Royal Concept"}, "publisher_metadata": {{publisher}}}
+            """), 1);
+
+        Assert.AreEqual(expected, job.Query.Title);
+    }
+
+    [TestMethod]
     public async Task MissingAuthToken_ReportsHowToSetIt()
     {
         var extractor = new SoundCloudExtractor(new SoundCloudSettings());
