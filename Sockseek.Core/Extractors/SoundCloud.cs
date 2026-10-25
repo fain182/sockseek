@@ -87,7 +87,9 @@ namespace Sockseek.Core.Extractors;
                 Artist = publisherArtist ?? track.GetProperty("user").GetProperty("username").GetString() ?? "",
                 Title = track.GetProperty("title").GetString() ?? "",
                 URI = track.TryGetProperty("permalink_url", out var url) ? url.GetString() ?? "" : "",
-                Length = track.TryGetProperty("duration", out var duration) ? duration.GetInt32() / 1000 : -1,
+                // For snippet-only tracks (e.g. Go+), `duration` is the ~30s snippet; `full_duration` is the whole track.
+                Length = track.TryGetProperty("full_duration", out var duration) || track.TryGetProperty("duration", out duration)
+                    ? duration.GetInt32() / 1000 : -1,
                 ArtistMaybeWrong = publisherArtist == null,
             };
 

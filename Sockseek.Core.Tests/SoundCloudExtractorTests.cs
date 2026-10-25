@@ -26,6 +26,16 @@ public class SoundCloudExtractorTests
     }
 
     [TestMethod]
+    public void SnippedTrack_UsesFullDuration()
+    {
+        var job = SoundCloudExtractor.ToSongJob(Track("""
+            {"id": 1, "title": "A Song", "duration": 30000, "full_duration": 199959, "policy": "SNIP", "user": {"username": "uploader"}}
+            """), 1);
+
+        Assert.AreEqual(199, job.Query.Length);
+    }
+
+    [TestMethod]
     [DataRow("""{"id": 1, "title": "Gimme Twice", "user": {"username": "uploader"}, "publisher_metadata": null}""")]
     [DataRow("""{"id": 1, "title": "Gimme Twice", "user": {"username": "uploader"}, "publisher_metadata": {"artist": ""}}""")]
     [DataRow("""{"id": 1, "title": "Gimme Twice", "user": {"username": "uploader"}}""")]
