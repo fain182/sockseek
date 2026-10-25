@@ -57,6 +57,10 @@ public class SoundCloudExtractorTests
     [DataRow("A - B - C", null, "The Royal Concept", "A - B - C")]
     [DataRow("Gorilla (Sammy Virji - Remix)", null, "The Royal Concept", "Gorilla (Sammy Virji - Remix)")]
     [DataRow("Rihanna - BBHMM", "Publisher Artist", "Publisher Artist", "Rihanna - BBHMM")]
+    [DataRow("Publisher Artist - BBHMM", "Publisher Artist", "Publisher Artist", "BBHMM")]
+    [DataRow("publisher artist - BBHMM", "Publisher Artist", "Publisher Artist", "BBHMM")]
+    [DataRow("Publisher Artist & Friend - BBHMM", "Publisher Artist", "Publisher Artist", "Publisher Artist & Friend - BBHMM")]
+    [DataRow("The Royal Concept - BBHMM", "Publisher Artist", "Publisher Artist", "The Royal Concept - BBHMM")]
     public void TitleArtist_IsUsedOnlyWithoutPublisherArtist(string title, string? publisherArtist, string expectedArtist, string expectedTitle)
     {
         var publisher = publisherArtist == null ? "null" : $$"""{"artist": "{{publisherArtist}}"}""";
