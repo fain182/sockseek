@@ -147,6 +147,10 @@ public static partial class Help
 
     --from-html <path>              Read Bandcamp page HTML from a local file
 
+  SoundCloud Options
+
+    --soundcloud-token <token>      SoundCloud OAuth token
+
   CSV File Options
 
     --artist-col <name>             Artist column name
@@ -347,6 +351,12 @@ Input types
       count, and no maximum track count unless --extract-max-track-count is set.
     - A /collection/... URL is treated as a list of albums, downloading each release contained
       within the collection.
+
+  SoundCloud
+    A public SoundCloud playlist URL (https://soundcloud.com/<user>/sets/<playlist>). Requires a
+    SoundCloud OAuth token, passed with --soundcloud-token (the same auth_token used by scdl). When
+    a track has no publisher artist, the uploader's name is used as the artist and
+    --artist-maybe-wrong is set for that track.
 
   Soulseek Link
     A direct path starting with slsk://. Paths ending in / are album/folder downloads; file paths
@@ -574,7 +584,7 @@ Configuration
     The following operators are supported for use in profile-cond: &&, ||, ==, !=, !{bool}. The
     following variables are available:
 
-    input-type        (""youtube""|""csv""|""string""|""bandcamp""|""spotify""|""list""|""soulseek""|""musicbrainz""|""none"")
+    input-type        (""youtube""|""csv""|""string""|""bandcamp""|""spotify""|""list""|""soulseek""|""musicbrainz""|""soundcloud""|""none"")
     download-mode     (""normal""|""song""|""aggregate""|""album""|""album-aggregate"")
     album             (bool)
     aggregate         (bool)

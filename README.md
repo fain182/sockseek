@@ -117,6 +117,7 @@ Sockseek searches the Soulseek P2P network. Sources like Spotify and YouTube are
   - [Spotify](#spotify)
   - [Bandcamp](#bandcamp)
   - [MusicBrainz](#musicbrainz)
+  - [SoundCloud](#soundcloud)
   - [Soulseek Link](#soulseek-link)
   - [Search string](#search-string)
   - [List file](#list-file)
@@ -211,6 +212,10 @@ A MusicBrainz.org URL for a release, release group, or collection.
 - A `/release/...` URL is treated as a single album download with a strict track count.
 - A `/release-group/...` URL is also treated as a single album download. It tries to pick the most common version of the album. Sets the minimum album track count to the chosen release track count, and no maximum track count unless `--extract-max-track-count` is set.
 - A `/collection/...` URL is treated as a list of albums, downloading each release contained within the collection.
+
+### SoundCloud
+
+A public SoundCloud playlist URL (`https://soundcloud.com/<user>/sets/<playlist>`). Requires a SoundCloud OAuth token, passed with `--soundcloud-token` (the same `auth_token` used by scdl). When a track has no publisher artist, the uploader's name is used as the artist and `--artist-maybe-wrong` is set for that track.
 
 ### Soulseek Link
 
@@ -386,7 +391,7 @@ The following operators are supported for use in profile-cond: &&, ||, ==, !=, !
 The following variables are available:
 
 ```
-input-type        ("youtube"|"csv"|"string"|"bandcamp"|"spotify"|"list"|"soulseek"|"musicbrainz"|"none")
+input-type        ("youtube"|"csv"|"string"|"bandcamp"|"spotify"|"list"|"soulseek"|"musicbrainz"|"soundcloud"|"none")
 download-mode     ("normal"|"song"|"aggregate"|"album"|"album-aggregate")
 album             (bool)
 aggregate         (bool)
@@ -979,6 +984,12 @@ sockseek daemon                 Start the HTTP/SignalR daemon instead of running
 
 ```
 --from-html <path>              Read Bandcamp page HTML from a local file
+```
+
+#### SoundCloud Options
+
+```
+--soundcloud-token <token>      SoundCloud OAuth token
 ```
 
 #### CSV File Options
